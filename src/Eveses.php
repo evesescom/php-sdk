@@ -8,8 +8,11 @@ use Eveses\Sdk\Exceptions\EvesesException;
 use Eveses\Sdk\Http\Client;
 use Eveses\Sdk\Modules\Activations;
 use Eveses\Sdk\Modules\Catalog;
+use Eveses\Sdk\Modules\Emails;
+use Eveses\Sdk\Modules\Proxies;
 use Eveses\Sdk\Modules\Wallet;
 use Eveses\Sdk\Modules\Webhooks;
+use Eveses\Sdk\Modules\WebUnblocker;
 
 /**
  * Eveses SDK client.
@@ -22,6 +25,9 @@ use Eveses\Sdk\Modules\Webhooks;
  *   $sms    = $client->activations->sms($order->orderId);
  *   $bal    = $client->wallet->balance();
  *   $svcs   = $client->catalog->services(['mode' => 'activation', 'country' => 'ua']);
+ *   $px     = $client->proxies->list();
+ *   $wu     = $client->webUnblocker->quote(10000);
+ *   $inbox  = $client->emails->get($uuid);
  *
  * Construction options (array key => meaning):
  *   - ``api_key``         (string, required) Sanctum personal-access token (kind=api_key).
@@ -33,19 +39,25 @@ use Eveses\Sdk\Modules\Webhooks;
  */
 final class Eveses
 {
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.2.0';
 
     private const DEFAULT_BASE_URL = 'https://api.eveses.com';
 
     private const DEFAULT_TIMEOUT_S = 30;
 
-    private const DEFAULT_USER_AGENT = 'eveses-php/0.1.0';
+    private const DEFAULT_USER_AGENT = 'eveses-php/0.2.0';
 
     public readonly Activations $activations;
 
     public readonly Wallet $wallet;
 
     public readonly Catalog $catalog;
+
+    public readonly Proxies $proxies;
+
+    public readonly WebUnblocker $webUnblocker;
+
+    public readonly Emails $emails;
 
     private readonly Client $http;
 
@@ -78,6 +90,9 @@ final class Eveses
         $this->activations = new Activations($this->http);
         $this->wallet = new Wallet($this->http);
         $this->catalog = new Catalog($this->http);
+        $this->proxies = new Proxies($this->http);
+        $this->webUnblocker = new WebUnblocker($this->http);
+        $this->emails = new Emails($this->http);
     }
 
     /**

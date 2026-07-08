@@ -1,8 +1,8 @@
 # eveses/sdk (PHP SDK)
 
 Official PHP SDK for the [Eveses](https://eveses.com) developer API.
-Activations, wallet, catalog (countries / services / pricing), and webhook
-signature verification.
+Activations, wallet, catalog (countries / services / pricing), proxies,
+web unblocker, emails, and webhook signature verification.
 
 Zero runtime dependencies — uses PHP's built-in `ext-curl` and `ext-json`.
 PHP 8.1+ with strict types throughout.
@@ -91,6 +91,103 @@ $pricing   = $client->catalog->pricing([
 `mode` accepts `'activation'` or `'rent'`. For rentals, pass
 `'duration_minutes' => N` to `pricing()` to filter to a single duration.
 
+## Proxies
+
+Buy and manage residential (metered, per-GB) and static (per-IP) proxies.
+Money is integer cents; the provider stays invisible behind the white-label
+host. Purchases accept an optional `idempotency_key` (sent as the
+`Idempotency-Key` header) so retries never double-charge.
+
+```php
+// Overview: residential connection + subscription + orders.
+$px = $client->proxies->list();
+// $px->residential->trafficGbAvailable, $px->subscription?->status, $px->orders
+
+// Residential GB ladder + static (per-IP) catalogue.
+$packages = $client->proxies->packages()->packages;
+$catalog  = $client->proxies->catalog()->products; // plan price_cents may be null → use quote()
+
+// Quote before buying — residential (metered) or a static selection.
+$q = $client->proxies->quote(['type' => 'residential', 'gb' => 5, 'subscription' => true]);
+$q = $client->proxies->quote(['type' => 'isp', 'product_id' => 1, 'plan_id' => 2, 'location_id' => 3, 'quantity' => 1]);
+// $q->data — the raw quote map (price_cents, currency, discount_pct, …)
+
+// Buy residential GB…
+$order = $client->proxies->purchase([
+    'type' => 'residential', 'gb' => 5, 'subscription' => false,
+    'idempotency_key' => 'my-uuid',
+]);
+// …or static IPs.
+$order = $client->proxies->purchase([
+    'type' => 'isp', 'product_id' => 1, 'plan_id' => 2, 'location_id' => 3,
+    'quantity' => 1, 'idempotency_key' => 'my-uuid',
+]);
+
+// Residential subscription management.
+$client->proxies->cancelSubscription();
+$client->proxies->pauseSubscription();
+$client->proxies->resumeSubscription();
+
+// Static (per-IP) order management.
+$client->proxies->extend($order->uuid, 30);       // re-charge for another period
+$client->proxies->autoRenew($order->uuid, true);  // toggle auto-extend
+
+// Targeting + usage.
+$geo   = $client->proxies->locations('residential')->geo;
+$usage = $client->proxies->usage(['from' => '2026-06-01', 'to' => '2026-06-30']);
+```
+
+## Web Unblocker
+
+An anti-bot scraping endpoint billed per successful request. Separate product
+from proxies.
+
+```php
+$wu = $client->webUnblocker->list();
+// $wu->access->requestsRemaining, $wu->subscription?->status, $wu->orders
+
+$packages = $client->webUnblocker->packages()->packages;
+$quote    = $client->webUnblocker->quote(10000);          // ->priceCents, ->per1kCents
+$quote    = $client->webUnblocker->quote(10000, true);    // subscription pricing
+
+$order = $client->webUnblocker->purchase([
+    'requests' => 10000, 'subscription' => false,
+    'idempotency_key' => 'my-uuid',
+]);
+
+$client->webUnblocker->cancelSubscription();
+$client->webUnblocker->pauseSubscription();
+$client->webUnblocker->resumeSubscription();
+```
+
+## Emails
+
+Rent an inbox address (our own catch-all domains, or a reseller) and read its
+mail.
+
+```php
+$mine = $client->emails->list()->emails;
+
+// Reseller providers need a `site`; our catch-all domains ignore it.
+$domains = $client->emails->domains(['site' => 'example.com'])->domains;
+$quote   = $client->emails->quote(['domain' => 'inbox.eveses.com', 'site' => 'example.com']);
+
+$order = $client->emails->purchase([
+    'domain' => 'inbox.eveses.com',
+    'site' => 'example.com',      // reseller only
+    'provider' => 'herosms',      // optional
+    'idempotency_key' => 'my-uuid',
+]);
+
+// get() also live-syncs reseller inboxes — poll it for new mail.
+$inbox = $client->emails->get($order->uuid);
+foreach ($inbox->messages ?? [] as $m) {
+    echo $m->from, ' — ', $m->subject, PHP_EOL;
+}
+
+$client->emails->delete($order->uuid);   // soft cancel, no refund
+```
+
 ## Webhook verification
 
 Eveses signs every outbound webhook delivery with HMAC-SHA256 over
@@ -174,6 +271,27 @@ served from `/api/account/*`. This SDK targets:
 | `GET    /api/v1/numbers/countries`           | `$client->catalog->countries([...])`   |
 | `GET    /api/v1/numbers/products`            | `$client->catalog->services([...])`    |
 | `GET    /api/v1/numbers/pricing`             | `$client->catalog->pricing([...])`     |
+| `GET    /api/account/proxies`                | `$client->proxies->list()`             |
+| `GET    /api/account/proxies/packages`       | `$client->proxies->packages()`         |
+| `GET    /api/account/proxies/catalog`        | `$client->proxies->catalog()`          |
+| `GET    /api/account/proxies/quote`          | `$client->proxies->quote([...])`       |
+| `GET    /api/account/proxies/locations`      | `$client->proxies->locations($type)`   |
+| `GET    /api/account/proxies/usage`          | `$client->proxies->usage([...])`       |
+| `POST   /api/account/proxies/purchase`       | `$client->proxies->purchase([...])`    |
+| `POST   /api/account/proxies/subscription/*` | `$client->proxies->{cancel,pause,resume}Subscription()` |
+| `POST   /api/account/proxies/{uuid}/extend`  | `$client->proxies->extend($uuid, $days)` |
+| `POST   /api/account/proxies/{uuid}/auto-renew` | `$client->proxies->autoRenew($uuid, $bool)` |
+| `GET    /api/account/web-unblocker`          | `$client->webUnblocker->list()`        |
+| `GET    /api/account/web-unblocker/packages` | `$client->webUnblocker->packages()`    |
+| `GET    /api/account/web-unblocker/quote`    | `$client->webUnblocker->quote($n)`     |
+| `POST   /api/account/web-unblocker/purchase` | `$client->webUnblocker->purchase([...])` |
+| `POST   /api/account/web-unblocker/subscription/*` | `$client->webUnblocker->{cancel,pause,resume}Subscription()` |
+| `GET    /api/account/emails`                 | `$client->emails->list()`              |
+| `GET    /api/account/emails/domains`         | `$client->emails->domains([...])`      |
+| `GET    /api/account/emails/quote`           | `$client->emails->quote([...])`        |
+| `POST   /api/account/emails/purchase`        | `$client->emails->purchase([...])`     |
+| `GET    /api/account/emails/{uuid}`          | `$client->emails->get($uuid)`          |
+| `DELETE /api/account/emails/{uuid}`          | `$client->emails->delete($uuid)`       |
 | _(webhook deliveries)_                       | `Webhooks::verify(...)`                |
 
 ## Configuration
