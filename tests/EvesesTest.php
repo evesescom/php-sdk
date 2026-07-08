@@ -319,6 +319,19 @@ final class EvesesTest extends TestCase
         $this->assertTrue($order->autoExtend);
     }
 
+    public function test_proxies_reset_sessions_posts_to_sessions_reset(): void
+    {
+        [$transport, $calls] = $this->fakeTransport([
+            ['status' => 200, 'body' => ['reset' => true]],
+        ]);
+        $client = new Eveses(['api_key' => 'k', 'base_url' => 'https://x.test', 'transport' => $transport]);
+
+        $client->proxies->resetSessions();
+
+        $this->assertSame('POST', $calls[0]['method']);
+        $this->assertSame('https://x.test/api/account/proxies/sessions/reset', $calls[0]['url']);
+    }
+
     // ------------------------------------------------------ web-unblocker --
 
     public function test_web_unblocker_list_maps_access_and_orders(): void

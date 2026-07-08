@@ -127,6 +127,7 @@ $order = $client->proxies->purchase([
 $client->proxies->cancelSubscription();
 $client->proxies->pauseSubscription();
 $client->proxies->resumeSubscription();
+$client->proxies->resetSessions(); // rotate residential sticky-session IPs
 
 // Static (per-IP) order management.
 $client->proxies->extend($order->uuid, 30);       // re-charge for another period
@@ -279,6 +280,7 @@ served from `/api/account/*`. This SDK targets:
 | `GET    /api/account/proxies/usage`          | `$client->proxies->usage([...])`       |
 | `POST   /api/account/proxies/purchase`       | `$client->proxies->purchase([...])`    |
 | `POST   /api/account/proxies/subscription/*` | `$client->proxies->{cancel,pause,resume}Subscription()` |
+| `POST   /api/account/proxies/sessions/reset` | `$client->proxies->resetSessions()`    |
 | `POST   /api/account/proxies/{uuid}/extend`  | `$client->proxies->extend($uuid, $days)` |
 | `POST   /api/account/proxies/{uuid}/auto-renew` | `$client->proxies->autoRenew($uuid, $bool)` |
 | `GET    /api/account/web-unblocker`          | `$client->webUnblocker->list()`        |

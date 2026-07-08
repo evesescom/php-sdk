@@ -19,6 +19,7 @@ use InvalidArgumentException;
  *   - GET  /usage                  residential usage timeline
  *   - POST /purchase               buy residential GB or static IPs (idempotent)
  *   - POST /subscription/{action}  cancel|pause|resume the residential subscription
+ *   - POST /sessions/reset         reset residential sticky sessions (rotate IPs)
  *   - POST /{uuid}/extend          extend a static order for another period
  *   - POST /{uuid}/auto-renew      toggle auto-extend on a static order
  *
@@ -280,6 +281,15 @@ final class Proxies
         );
 
         return self::mapOrder(self::unwrap($res));
+    }
+
+    /**
+     * Reset the user's residential sticky sessions; the next request rotates to
+     * fresh IPs. Requires a provisioned residential sub-user.
+     */
+    public function resetSessions(): void
+    {
+        $this->http->request('POST', '/api/account/proxies/sessions/reset');
     }
 
     private function subscriptionAction(string $action): object
