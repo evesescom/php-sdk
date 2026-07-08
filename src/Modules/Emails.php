@@ -18,6 +18,8 @@ use InvalidArgumentException;
  *   - POST   /purchase        rent an address (idempotent)
  *   - GET    /{uuid}          one address + its received messages (also the
  *                             reseller inbox-refresh mechanism — poll this)
+ *   - GET    /{uuid}/messages a paginated page of the address's messages
+ *   - POST   /{uuid}/messages/{id}/read  mark one message read
  *   - DELETE /{uuid}          release the address (soft cancel, no refund)
  *
  * Money is integer cents; timestamps are ISO-8601 strings.
@@ -27,13 +29,15 @@ final class Emails
     public function __construct(private readonly Client $http) {}
 
     /**
-     * The user's rented addresses.
+     * The user's rented addresses. Pass ``$includeReleased = true`` to also
+     * return released (soft-cancelled) addresses (sends ``?include_released=1``).
      *
      * @return object{emails:array<int,object>, raw:array<string,mixed>}
      */
-    public function list(): object
+    public function list(bool $includeReleased = false): object
     {
-        $res = $this->http->request('GET', '/api/account/emails');
+        $query = $includeReleased ? ['include_released' => 1] : [];
+        $res = $this->http->request('GET', '/api/account/emails', $query);
         $d = self::unwrap($res);
 
         return (object) [
@@ -147,6 +151,54 @@ final class Emails
         return self::mapAddress(self::unwrap($res));
     }
 
+    /**
+     * A paginated page of an address's received messages. Unlike ``get()`` this
+     * returns full message rows (id, read state) plus pagination metadata.
+     *
+     * @return object{messages:array<int,object>, page:int, perPage:int, total:int, hasMore:bool, raw:array<string,mixed>}
+     */
+    public function messages(string $uuid, int $page = 1, int $perPage = 20): object
+    {
+        $res = $this->http->request(
+            'GET',
+            '/api/account/emails/'.rawurlencode($uuid).'/messages',
+            ['page' => $page, 'per_page' => $perPage],
+        );
+        $d = self::unwrap($res);
+
+        return (object) [
+            'messages' => array_map(
+                [self::class, 'mapMessage'],
+                array_values((array) ($d['messages'] ?? [])),
+            ),
+            'page' => self::intOr($d['page'] ?? null, $page),
+            'perPage' => self::intOr($d['per_page'] ?? null, $perPage),
+            'total' => self::intOr($d['total'] ?? null, 0),
+            'hasMore' => isset($d['has_more']) && is_bool($d['has_more']) ? $d['has_more'] : false,
+            'raw' => $d,
+        ];
+    }
+
+    /**
+     * Mark a single message as read. Returns the message id and its read state.
+     *
+     * @return object{id:?string, read:bool, raw:array<string,mixed>}
+     */
+    public function markRead(string $uuid, string $messageId): object
+    {
+        $res = $this->http->request(
+            'POST',
+            '/api/account/emails/'.rawurlencode($uuid).'/messages/'.rawurlencode($messageId).'/read',
+        );
+        $d = self::unwrap($res);
+
+        return (object) [
+            'id' => isset($d['id']) && (is_string($d['id']) || is_int($d['id'])) ? (string) $d['id'] : null,
+            'read' => isset($d['read']) && is_bool($d['read']) ? $d['read'] : false,
+            'raw' => $d,
+        ];
+    }
+
     /** Release an address (stop receiving). Soft cancel — no refund. */
     public function delete(string $uuid): object
     {
@@ -206,10 +258,13 @@ final class Emails
         $d = is_array($m) ? $m : [];
 
         return (object) [
+            'id' => isset($d['id']) && (is_string($d['id']) || is_int($d['id'])) ? (string) $d['id'] : null,
             'from' => isset($d['from']) && is_string($d['from']) ? $d['from'] : null,
             'subject' => isset($d['subject']) && is_string($d['subject']) ? $d['subject'] : null,
             'body' => isset($d['body']) && is_string($d['body']) ? $d['body'] : null,
             'receivedAt' => isset($d['received_at']) && is_string($d['received_at']) ? $d['received_at'] : null,
+            'readAt' => isset($d['read_at']) && is_string($d['read_at']) ? $d['read_at'] : null,
+            'isRead' => isset($d['is_read']) && is_bool($d['is_read']) ? $d['is_read'] : false,
             'raw' => $d,
         ];
     }

@@ -136,6 +136,10 @@ $client->proxies->autoRenew($order->uuid, true);  // toggle auto-extend
 // Targeting + usage.
 $geo   = $client->proxies->locations('residential')->geo;
 $usage = $client->proxies->usage(['from' => '2026-06-01', 'to' => '2026-06-30']);
+
+// Connection endpoints (regions / ports / protocols).
+$ep = $client->proxies->endpoints();
+// $ep->regions[0]->code/host/label, $ep->ports['http'], $ep->protocols
 ```
 
 ## Web Unblocker
@@ -168,6 +172,7 @@ mail.
 
 ```php
 $mine = $client->emails->list()->emails;
+$all  = $client->emails->list(true)->emails;   // include released addresses
 
 // Reseller providers need a `site`; our catch-all domains ignore it.
 $domains = $client->emails->domains(['site' => 'example.com'])->domains;
@@ -185,6 +190,16 @@ $inbox = $client->emails->get($order->uuid);
 foreach ($inbox->messages ?? [] as $m) {
     echo $m->from, ' — ', $m->subject, PHP_EOL;
 }
+
+// Paginated message list (full rows incl. id + read state).
+$page = $client->emails->messages($order->uuid, 1, 20);
+foreach ($page->messages as $m) {
+    echo $m->id, ' ', $m->isRead ? 'read' : 'unread', ' — ', $m->subject, PHP_EOL;
+}
+// $page->page, $page->perPage, $page->total, $page->hasMore
+
+// Mark one message read.
+$client->emails->markRead($order->uuid, $page->messages[0]->id);
 
 $client->emails->delete($order->uuid);   // soft cancel, no refund
 ```
@@ -278,6 +293,7 @@ served from `/api/account/*`. This SDK targets:
 | `GET    /api/account/proxies/quote`          | `$client->proxies->quote([...])`       |
 | `GET    /api/account/proxies/locations`      | `$client->proxies->locations($type)`   |
 | `GET    /api/account/proxies/usage`          | `$client->proxies->usage([...])`       |
+| `GET    /api/account/proxies/endpoints`      | `$client->proxies->endpoints()`        |
 | `POST   /api/account/proxies/purchase`       | `$client->proxies->purchase([...])`    |
 | `POST   /api/account/proxies/subscription/*` | `$client->proxies->{cancel,pause,resume}Subscription()` |
 | `POST   /api/account/proxies/sessions/reset` | `$client->proxies->resetSessions()`    |
@@ -293,6 +309,8 @@ served from `/api/account/*`. This SDK targets:
 | `GET    /api/account/emails/quote`           | `$client->emails->quote([...])`        |
 | `POST   /api/account/emails/purchase`        | `$client->emails->purchase([...])`     |
 | `GET    /api/account/emails/{uuid}`          | `$client->emails->get($uuid)`          |
+| `GET    /api/account/emails/{uuid}/messages` | `$client->emails->messages($uuid, $page, $perPage)` |
+| `POST   /api/account/emails/{uuid}/messages/{id}/read` | `$client->emails->markRead($uuid, $id)` |
 | `DELETE /api/account/emails/{uuid}`          | `$client->emails->delete($uuid)`       |
 | _(webhook deliveries)_                       | `Webhooks::verify(...)`                |
 

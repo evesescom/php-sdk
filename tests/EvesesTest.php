@@ -319,6 +319,33 @@ final class EvesesTest extends TestCase
         $this->assertTrue($order->autoExtend);
     }
 
+    public function test_proxies_endpoints_maps_regions_ports_and_protocols(): void
+    {
+        [$transport, $calls] = $this->fakeTransport([
+            ['status' => 200, 'body' => ['data' => [
+                'regions' => [
+                    ['code' => 'auto', 'host' => 'proxy.eveses.com', 'label' => 'Automatic (nearest)'],
+                    ['code' => 'us', 'host' => 'us.proxy.eveses.com', 'label' => 'United States'],
+                ],
+                'ports' => ['http' => [12321, 11200], 'socks5' => [32325, 51200]],
+                'protocols' => ['http', 'socks5'],
+            ]]],
+        ]);
+        $client = new Eveses(['api_key' => 'k', 'base_url' => 'https://x.test', 'transport' => $transport]);
+
+        $res = $client->proxies->endpoints();
+
+        $this->assertSame('GET', $calls[0]['method']);
+        $this->assertSame('https://x.test/api/account/proxies/endpoints', $calls[0]['url']);
+        $this->assertCount(2, $res->regions);
+        $this->assertSame('auto', $res->regions[0]->code);
+        $this->assertSame('proxy.eveses.com', $res->regions[0]->host);
+        $this->assertSame('Automatic (nearest)', $res->regions[0]->label);
+        $this->assertSame([12321, 11200], $res->ports['http']);
+        $this->assertSame([32325, 51200], $res->ports['socks5']);
+        $this->assertSame(['http', 'socks5'], $res->protocols);
+    }
+
     public function test_proxies_reset_sessions_posts_to_sessions_reset(): void
     {
         [$transport, $calls] = $this->fakeTransport([
@@ -494,6 +521,80 @@ final class EvesesTest extends TestCase
         $this->assertCount(1, $res->messages);
         $this->assertSame('Hi', $res->messages[0]->subject);
         $this->assertSame('s@x.com', $res->messages[0]->from);
+    }
+
+    public function test_emails_list_omits_include_released_by_default(): void
+    {
+        [$transport, $calls] = $this->fakeTransport([
+            ['status' => 200, 'body' => ['data' => ['emails' => []]]],
+        ]);
+        $client = new Eveses(['api_key' => 'k', 'base_url' => 'https://x.test', 'transport' => $transport]);
+
+        $client->emails->list();
+
+        $this->assertSame('https://x.test/api/account/emails', $calls[0]['url']);
+        $this->assertStringNotContainsString('include_released', $calls[0]['url']);
+    }
+
+    public function test_emails_list_sends_include_released_when_true(): void
+    {
+        [$transport, $calls] = $this->fakeTransport([
+            ['status' => 200, 'body' => ['data' => ['emails' => []]]],
+        ]);
+        $client = new Eveses(['api_key' => 'k', 'base_url' => 'https://x.test', 'transport' => $transport]);
+
+        $client->emails->list(true);
+
+        $url = parse_url($calls[0]['url']);
+        parse_str($url['query'] ?? '', $qs);
+        $this->assertSame('/api/account/emails', $url['path']);
+        $this->assertSame('1', $qs['include_released']);
+    }
+
+    public function test_emails_messages_forwards_pagination_and_maps_page(): void
+    {
+        [$transport, $calls] = $this->fakeTransport([
+            ['status' => 200, 'body' => ['data' => [
+                'messages' => [
+                    ['id' => 'm1', 'from' => 's@x.com', 'subject' => 'Hi', 'body' => 'Body',
+                        'received_at' => '2026-07-01T00:00:00+00:00', 'read_at' => null, 'is_read' => false],
+                ],
+                'page' => 2, 'per_page' => 5, 'total' => 7, 'has_more' => false,
+            ]]],
+        ]);
+        $client = new Eveses(['api_key' => 'k', 'base_url' => 'https://x.test', 'transport' => $transport]);
+
+        $res = $client->emails->messages('e1', 2, 5);
+
+        $url = parse_url($calls[0]['url']);
+        parse_str($url['query'] ?? '', $qs);
+        $this->assertSame('GET', $calls[0]['method']);
+        $this->assertSame('/api/account/emails/e1/messages', $url['path']);
+        $this->assertSame('2', $qs['page']);
+        $this->assertSame('5', $qs['per_page']);
+        $this->assertCount(1, $res->messages);
+        $this->assertSame('m1', $res->messages[0]->id);
+        $this->assertSame('Hi', $res->messages[0]->subject);
+        $this->assertFalse($res->messages[0]->isRead);
+        $this->assertSame(2, $res->page);
+        $this->assertSame(5, $res->perPage);
+        $this->assertSame(7, $res->total);
+        $this->assertFalse($res->hasMore);
+    }
+
+    public function test_emails_mark_read_posts_to_read_path_and_decodes(): void
+    {
+        [$transport, $calls] = $this->fakeTransport([
+            ['status' => 200, 'body' => ['data' => ['id' => 'm1', 'read' => true]]],
+        ]);
+        $client = new Eveses(['api_key' => 'k', 'base_url' => 'https://x.test', 'transport' => $transport]);
+
+        $res = $client->emails->markRead('e1', 'm1');
+
+        $this->assertSame('POST', $calls[0]['method']);
+        $this->assertSame('https://x.test/api/account/emails/e1/messages/m1/read', $calls[0]['url']);
+        $this->assertSame('m1', $res->id);
+        $this->assertTrue($res->read);
     }
 
     // ------------------------------------------------------- exceptions --

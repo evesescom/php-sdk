@@ -17,6 +17,7 @@ use InvalidArgumentException;
  *   - GET  /quote                  price a residential or static selection
  *   - GET  /locations              targeting (residential geo / static products)
  *   - GET  /usage                  residential usage timeline
+ *   - GET  /endpoints              connection endpoints (regions / ports / protocols)
  *   - POST /purchase               buy residential GB or static IPs (idempotent)
  *   - POST /subscription/{action}  cancel|pause|resume the residential subscription
  *   - POST /sessions/reset         reset residential sticky sessions (rotate IPs)
@@ -183,6 +184,32 @@ final class Proxies
     }
 
     /**
+     * Connection endpoints for residential proxies: the targetable ``regions``
+     * (each with a ``code``/``host``/``label``), the available ``ports`` per
+     * protocol, and the supported ``protocols``.
+     *
+     * @return object{regions:array<int,object>, ports:array<string,array<int,int>>, protocols:array<int,string>, raw:array<string,mixed>}
+     */
+    public function endpoints(): object
+    {
+        $res = $this->http->request('GET', '/api/account/proxies/endpoints');
+        $d = self::unwrap($res);
+
+        return (object) [
+            'regions' => array_map(
+                [self::class, 'mapRegion'],
+                array_values((array) ($d['regions'] ?? [])),
+            ),
+            'ports' => self::mapPorts($d['ports'] ?? []),
+            'protocols' => array_values(array_filter(
+                (array) ($d['protocols'] ?? []),
+                'is_string',
+            )),
+            'raw' => $d,
+        ];
+    }
+
+    /**
      * Buy proxies (residential GB top-up or static IPs). Returns the created
      * order. Pass ``idempotency_key`` to make the purchase safely retryable —
      * it is sent as the ``Idempotency-Key`` header.
@@ -332,6 +359,45 @@ final class Proxies
             'renewFailures' => self::intOr($d['renew_failures'] ?? null, 0),
             'raw' => $d,
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>|mixed  $m
+     */
+    private static function mapRegion(mixed $m): object
+    {
+        $d = is_array($m) ? $m : [];
+
+        return (object) [
+            'code' => isset($d['code']) && is_string($d['code']) ? $d['code'] : '',
+            'host' => isset($d['host']) && is_string($d['host']) ? $d['host'] : '',
+            'label' => isset($d['label']) && is_string($d['label']) ? $d['label'] : null,
+            'raw' => $d,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>|mixed  $m
+     * @return array<string,array<int,int>>
+     */
+    private static function mapPorts(mixed $m): array
+    {
+        if (! is_array($m)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($m as $protocol => $ports) {
+            if (! is_string($protocol)) {
+                continue;
+            }
+            $out[$protocol] = array_values(array_map(
+                'intval',
+                array_filter((array) $ports, static fn ($p): bool => is_int($p) || is_float($p)),
+            ));
+        }
+
+        return $out;
     }
 
     /**
