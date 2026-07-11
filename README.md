@@ -2,7 +2,8 @@
 
 Official PHP SDK for the [Eveses](https://eveses.com) developer API.
 Activations, wallet, catalog (countries / services / pricing), proxies,
-web unblocker, emails, and webhook signature verification.
+web-unblocker, temporary emails, captcha-solving, fingerprints, free trials,
+and webhook signature verification.
 
 Zero runtime dependencies — uses PHP's built-in `ext-curl` and `ext-json`.
 PHP 8.1+ with strict types throughout.
@@ -93,115 +94,125 @@ $pricing   = $client->catalog->pricing([
 
 ## Proxies
 
-Buy and manage residential (metered, per-GB) and static (per-IP) proxies.
-Money is integer cents; the provider stays invisible behind the white-label
-host. Purchases accept an optional `idempotency_key` (sent as the
-`Idempotency-Key` header) so retries never double-charge.
+Buy and manage residential (metered, per-GB) and static (per-IP: ISP /
+datacenter / IPv6 / sneaker / mobile) proxies. The upstream provider stays
+invisible — connection details come back under the white-label host.
 
 ```php
-// Overview: residential connection + subscription + orders.
-$px = $client->proxies->list();
-// $px->residential->trafficGbAvailable, $px->subscription?->status, $px->orders
+// Browse
+$packages  = $client->proxy->packages();                    // residential GB ladder
+$endpoints = $client->proxy->endpoints();                   // white-label entry hosts + ports
+$catalog   = $client->proxy->catalog();                     // static (per-IP) products/plans
+$locations = $client->proxy->locations('residential');      // targeting for a type
 
-// Residential GB ladder + static (per-IP) catalogue.
-$packages = $client->proxies->packages()->packages;
-$catalog  = $client->proxies->catalog()->products; // plan price_cents may be null → use quote()
-
-// Quote before buying — residential (metered) or a static selection.
-$q = $client->proxies->quote(['type' => 'residential', 'gb' => 5, 'subscription' => true]);
-$q = $client->proxies->quote(['type' => 'isp', 'product_id' => 1, 'plan_id' => 2, 'location_id' => 3, 'quantity' => 1]);
-// $q->data — the raw quote map (price_cents, currency, discount_pct, …)
-
-// Buy residential GB…
-$order = $client->proxies->purchase([
-    'type' => 'residential', 'gb' => 5, 'subscription' => false,
+// Estimate then buy
+$quote = $client->proxy->quote(['type' => 'residential', 'gb' => 5]);
+$order = $client->proxy->purchase([
+    'type'            => 'residential',
+    'gb'              => 5,
+    'subscription'    => false,
     'idempotency_key' => 'my-uuid',
 ]);
-// …or static IPs.
-$order = $client->proxies->purchase([
-    'type' => 'isp', 'product_id' => 1, 'plan_id' => 2, 'location_id' => 3,
-    'quantity' => 1, 'idempotency_key' => 'my-uuid',
+// static (per-IP) purchase:
+$order = $client->proxy->purchase([
+    'type'        => 'isp',
+    'product_id'  => 1,
+    'plan_id'     => 2,
+    'location_id' => 3,
+    'quantity'    => 1,
 ]);
 
-// Residential subscription management.
-$client->proxies->cancelSubscription();
-$client->proxies->pauseSubscription();
-$client->proxies->resumeSubscription();
-$client->proxies->resetSessions(); // rotate residential sticky-session IPs
+// Manage
+$mine = $client->proxy->list();                             // residential + subscription + per-IP orders
+$client->proxy->extend($order->uuid, 30);                  // re-charge a per-IP order
+$client->proxy->autoRenew($order->uuid, true);             // toggle auto_extend
+$client->proxy->resetSessions();                           // rotate residential sticky IPs
+$client->proxy->usage(['from' => '2026-06-01', 'to' => '2026-06-30']);
+$client->proxy->trial();                                    // free proxy trial (one-time)
 
-// Static (per-IP) order management.
-$client->proxies->extend($order->uuid, 30);       // re-charge for another period
-$client->proxies->autoRenew($order->uuid, true);  // toggle auto-extend
-
-// Targeting + usage.
-$geo   = $client->proxies->locations('residential')->geo;
-$usage = $client->proxies->usage(['from' => '2026-06-01', 'to' => '2026-06-30']);
-
-// Connection endpoints (regions / ports / protocols).
-$ep = $client->proxies->endpoints();
-// $ep->regions[0]->code/host/label, $ep->ports['http'], $ep->protocols
+// Residential subscription lifecycle
+$client->proxy->subscriptionPause();
+$client->proxy->subscriptionResume();
+$client->proxy->subscriptionCancel();
 ```
 
 ## Web Unblocker
 
-An anti-bot scraping endpoint billed per successful request. Separate product
-from proxies.
+Request-based web-unblocker access, subscriptions, and a free trial.
 
 ```php
-$wu = $client->webUnblocker->list();
-// $wu->access->requestsRemaining, $wu->subscription?->status, $wu->orders
+$packages = $client->webUnblocker->packages();
+$quote    = $client->webUnblocker->quote(1000, subscription: false);
 
-$packages = $client->webUnblocker->packages()->packages;
-$quote    = $client->webUnblocker->quote(10000);          // ->priceCents, ->per1kCents
-$quote    = $client->webUnblocker->quote(10000, true);    // subscription pricing
+$access = $client->webUnblocker->purchase(1000, subscription: false, idempotencyKey: 'my-uuid');
+// $access->requests / requestsUsed / status / priceCents / currency
 
-$order = $client->webUnblocker->purchase([
-    'requests' => 10000, 'subscription' => false,
-    'idempotency_key' => 'my-uuid',
-]);
+$client->webUnblocker->trial();                             // free trial (one-time)
+$current = $client->webUnblocker->access();                 // budget + credentials + subscription
 
-$client->webUnblocker->cancelSubscription();
-$client->webUnblocker->pauseSubscription();
-$client->webUnblocker->resumeSubscription();
+$client->webUnblocker->subscriptionPause();
+$client->webUnblocker->subscriptionResume();
+$client->webUnblocker->subscriptionCancel();
 ```
 
 ## Emails
 
-Rent an inbox address (our own catch-all domains, or a reseller) and read its
-mail.
+Buy and manage temporary / disposable email inboxes, then poll them for
+messages.
 
 ```php
-$mine = $client->emails->list()->emails;
-$all  = $client->emails->list(true)->emails;   // include released addresses
+$domains = $client->emails->domains();                      // optionally ->domains('site.com')
+$quote   = $client->emails->quote('example.com');
 
-// Reseller providers need a `site`; our catch-all domains ignore it.
-$domains = $client->emails->domains(['site' => 'example.com'])->domains;
-$quote   = $client->emails->quote(['domain' => 'inbox.eveses.com', 'site' => 'example.com']);
+$mailbox = $client->emails->purchase('example.com', idempotencyKey: 'my-uuid');
+// $mailbox->uuid / address / status / priceCents / currency
 
-$order = $client->emails->purchase([
-    'domain' => 'inbox.eveses.com',
-    'site' => 'example.com',      // reseller only
-    'provider' => 'herosms',      // optional
+$all      = $client->emails->list();                        // ->list(includeReleased: true) to include freed
+$one      = $client->emails->get($mailbox->uuid);
+$messages = $client->emails->messages($mailbox->uuid, page: 1, perPage: 20);
+$client->emails->markRead($mailbox->uuid, $messageId);
+$client->emails->release($mailbox->uuid);                   // delete/free the address
+```
+
+## Captcha solving
+
+Resells 2captcha, billed pay-per-use from the wallet (count-on-success).
+`solve()` blocks: it submits the task, then polls honouring the API's
+`retry_after` until the task is `ready`/`failed` or the timeout elapses.
+
+```php
+$result = $client->captcha->solve('recaptcha_v2', [
+    'sitekey' => '6Le-...',
+    'url'     => 'https://example.com/login',
+], [
+    'timeout_sec'     => 180,
     'idempotency_key' => 'my-uuid',
+    // 'callback_url' => 'https://my.app/captcha-webhook',
 ]);
+// $result->taskId / status / solution / priceMicroUsd
+```
 
-// get() also live-syncs reseller inboxes — poll it for new mail.
-$inbox = $client->emails->get($order->uuid);
-foreach ($inbox->messages ?? [] as $m) {
-    echo $m->from, ' — ', $m->subject, PHP_EOL;
-}
+A `failed` task or a timeout throws `Eveses\Sdk\Exceptions\EvesesException`.
 
-// Paginated message list (full rows incl. id + read state).
-$page = $client->emails->messages($order->uuid, 1, 20);
-foreach ($page->messages as $m) {
-    echo $m->id, ' ', $m->isRead ? 'read' : 'unread', ' — ', $m->subject, PHP_EOL;
-}
-// $page->page, $page->perPage, $page->total, $page->hasMore
+## Fingerprints
 
-// Mark one message read.
-$client->emails->markRead($order->uuid, $page->messages[0]->id);
+Resells 2captcha's Fingerprint API, billed pay-per-use from the wallet
+(count-on-success). Unlike captcha solving this is synchronous — one request
+returns a complete fingerprint.
 
-$client->emails->delete($order->uuid);   // soft cancel, no refund
+```php
+$out = $client->fingerprints->generate(['os' => 'windows', 'browser' => 'chrome']);
+$out = $client->fingerprints->random();                     // random, optionally filtered
+// $out->fingerprint (array) / $out->priceMicroUsd
+```
+
+## Trials
+
+Check and activate free-trial access for one or more product services.
+
+```php
+$status = $client->trial->status();                         // eligibility / active services
+$client->trial->subscribe(['proxies', 'web-unblocker']);    // enrol service slugs
 ```
 
 ## Webhook verification
@@ -287,31 +298,14 @@ served from `/api/account/*`. This SDK targets:
 | `GET    /api/v1/numbers/countries`           | `$client->catalog->countries([...])`   |
 | `GET    /api/v1/numbers/products`            | `$client->catalog->services([...])`    |
 | `GET    /api/v1/numbers/pricing`             | `$client->catalog->pricing([...])`     |
-| `GET    /api/account/proxies`                | `$client->proxies->list()`             |
-| `GET    /api/account/proxies/packages`       | `$client->proxies->packages()`         |
-| `GET    /api/account/proxies/catalog`        | `$client->proxies->catalog()`          |
-| `GET    /api/account/proxies/quote`          | `$client->proxies->quote([...])`       |
-| `GET    /api/account/proxies/locations`      | `$client->proxies->locations($type)`   |
-| `GET    /api/account/proxies/usage`          | `$client->proxies->usage([...])`       |
-| `GET    /api/account/proxies/endpoints`      | `$client->proxies->endpoints()`        |
-| `POST   /api/account/proxies/purchase`       | `$client->proxies->purchase([...])`    |
-| `POST   /api/account/proxies/subscription/*` | `$client->proxies->{cancel,pause,resume}Subscription()` |
-| `POST   /api/account/proxies/sessions/reset` | `$client->proxies->resetSessions()`    |
-| `POST   /api/account/proxies/{uuid}/extend`  | `$client->proxies->extend($uuid, $days)` |
-| `POST   /api/account/proxies/{uuid}/auto-renew` | `$client->proxies->autoRenew($uuid, $bool)` |
-| `GET    /api/account/web-unblocker`          | `$client->webUnblocker->list()`        |
-| `GET    /api/account/web-unblocker/packages` | `$client->webUnblocker->packages()`    |
-| `GET    /api/account/web-unblocker/quote`    | `$client->webUnblocker->quote($n)`     |
-| `POST   /api/account/web-unblocker/purchase` | `$client->webUnblocker->purchase([...])` |
-| `POST   /api/account/web-unblocker/subscription/*` | `$client->webUnblocker->{cancel,pause,resume}Subscription()` |
-| `GET    /api/account/emails`                 | `$client->emails->list()`              |
-| `GET    /api/account/emails/domains`         | `$client->emails->domains([...])`      |
-| `GET    /api/account/emails/quote`           | `$client->emails->quote([...])`        |
-| `POST   /api/account/emails/purchase`        | `$client->emails->purchase([...])`     |
-| `GET    /api/account/emails/{uuid}`          | `$client->emails->get($uuid)`          |
-| `GET    /api/account/emails/{uuid}/messages` | `$client->emails->messages($uuid, $page, $perPage)` |
-| `POST   /api/account/emails/{uuid}/messages/{id}/read` | `$client->emails->markRead($uuid, $id)` |
-| `DELETE /api/account/emails/{uuid}`          | `$client->emails->delete($uuid)`       |
+| `GET    /api/account/proxies*`               | `$client->proxy->…`                    |
+| `POST   /api/account/proxies/purchase`       | `$client->proxy->purchase([...])`      |
+| `GET    /api/account/web-unblocker*`         | `$client->webUnblocker->…`             |
+| `GET    /api/account/emails*`                | `$client->emails->…`                   |
+| `POST   /api/account/captcha/solve`          | `$client->captcha->solve(...)`         |
+| `POST   /api/account/fingerprints/*`         | `$client->fingerprints->…`             |
+| `GET    /api/account/trial`                  | `$client->trial->status()`             |
+| `POST   /api/account/trial/subscribe`        | `$client->trial->subscribe([...])`     |
 | _(webhook deliveries)_                       | `Webhooks::verify(...)`                |
 
 ## Configuration
@@ -336,6 +330,32 @@ vendor/bin/phpunit
 
 The test suite uses a tiny callable transport hook for HTTP — no Guzzle,
 no Mockery, no networking. See `tests/EvesesTest.php`.
+
+## Changelog
+
+### 0.3.0
+
+- **New `proxy` module** — residential (per-GB) and static (per-IP) proxies:
+  `packages`, `endpoints`, `catalog`, `locations`, `quote`, `purchase`,
+  `list`, `extend`, `autoRenew`, `resetSessions`, `usage`, `trial`, and
+  residential subscription `pause`/`resume`/`cancel`. Replaces the old
+  `proxies` module.
+- **New `webUnblocker` module** — request-based access with `packages`,
+  `quote`, `purchase`, `trial`, `access`, and subscription
+  `pause`/`resume`/`cancel`.
+- **New `emails` module** — temporary inboxes: `domains`, `quote`,
+  `purchase`, `list`, `get`, `messages`, `markRead`, `release`.
+- **New `captcha` module** — blocking `solve()` that resells 2captcha,
+  submitting a task and polling `retry_after` until `ready`/`failed`.
+- **New `fingerprints` module** — synchronous `generate()` / `random()`
+  over the 2captcha Fingerprint API.
+- **New `trial` module** — `status()` and `subscribe()` for free-trial
+  service enrolment.
+
+### 0.2.0
+
+- Activations, wallet, catalog (countries / services / pricing), and
+  webhook signature verification.
 
 ## License
 

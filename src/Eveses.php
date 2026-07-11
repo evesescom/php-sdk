@@ -7,9 +7,12 @@ namespace Eveses\Sdk;
 use Eveses\Sdk\Exceptions\EvesesException;
 use Eveses\Sdk\Http\Client;
 use Eveses\Sdk\Modules\Activations;
+use Eveses\Sdk\Modules\Captcha;
 use Eveses\Sdk\Modules\Catalog;
 use Eveses\Sdk\Modules\Emails;
-use Eveses\Sdk\Modules\Proxies;
+use Eveses\Sdk\Modules\Fingerprints;
+use Eveses\Sdk\Modules\Proxy;
+use Eveses\Sdk\Modules\Trial;
 use Eveses\Sdk\Modules\Wallet;
 use Eveses\Sdk\Modules\Webhooks;
 use Eveses\Sdk\Modules\WebUnblocker;
@@ -25,9 +28,6 @@ use Eveses\Sdk\Modules\WebUnblocker;
  *   $sms    = $client->activations->sms($order->orderId);
  *   $bal    = $client->wallet->balance();
  *   $svcs   = $client->catalog->services(['mode' => 'activation', 'country' => 'ua']);
- *   $px     = $client->proxies->list();
- *   $wu     = $client->webUnblocker->quote(10000);
- *   $inbox  = $client->emails->get($uuid);
  *
  * Construction options (array key => meaning):
  *   - ``api_key``         (string, required) Sanctum personal-access token (kind=api_key).
@@ -39,13 +39,13 @@ use Eveses\Sdk\Modules\WebUnblocker;
  */
 final class Eveses
 {
-    public const VERSION = '0.2.0';
+    public const VERSION = '0.3.0';
 
     private const DEFAULT_BASE_URL = 'https://api.eveses.com';
 
     private const DEFAULT_TIMEOUT_S = 30;
 
-    private const DEFAULT_USER_AGENT = 'eveses-php/0.2.0';
+    private const DEFAULT_USER_AGENT = 'eveses-php/0.3.0';
 
     public readonly Activations $activations;
 
@@ -53,11 +53,17 @@ final class Eveses
 
     public readonly Catalog $catalog;
 
-    public readonly Proxies $proxies;
-
-    public readonly WebUnblocker $webUnblocker;
+    public readonly Captcha $captcha;
 
     public readonly Emails $emails;
+
+    public readonly Fingerprints $fingerprints;
+
+    public readonly Proxy $proxy;
+
+    public readonly Trial $trial;
+
+    public readonly WebUnblocker $webUnblocker;
 
     private readonly Client $http;
 
@@ -90,9 +96,12 @@ final class Eveses
         $this->activations = new Activations($this->http);
         $this->wallet = new Wallet($this->http);
         $this->catalog = new Catalog($this->http);
-        $this->proxies = new Proxies($this->http);
-        $this->webUnblocker = new WebUnblocker($this->http);
+        $this->captcha = new Captcha($this->http);
         $this->emails = new Emails($this->http);
+        $this->fingerprints = new Fingerprints($this->http);
+        $this->proxy = new Proxy($this->http);
+        $this->trial = new Trial($this->http);
+        $this->webUnblocker = new WebUnblocker($this->http);
     }
 
     /**
