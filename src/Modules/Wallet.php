@@ -7,7 +7,7 @@ namespace Eveses\Sdk\Modules;
 use Eveses\Sdk\Http\Client;
 
 /**
- * Wallet namespace. Hits ``/api/account/wallet``.
+ * Wallet namespace. Hits ``/api/v1/wallet``.
  */
 final class Wallet
 {
@@ -21,7 +21,7 @@ final class Wallet
      */
     public function balance(): object
     {
-        $res = $this->http->request('GET', '/api/account/wallet');
+        $res = $this->http->request('GET', '/api/v1/wallet');
         $d = self::unwrap($res);
 
         return (object) [

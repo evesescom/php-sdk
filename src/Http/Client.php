@@ -17,7 +17,7 @@ use Eveses\Sdk\Exceptions\EvesesRateLimitException;
  *
  * Public-API contract (for tests + callers):
  *   - Bearer auth header on every request
- *   - Idempotency-Key header passthrough (set by the Activations module)
+ *   - Idempotency-Key header passthrough (set by the Numbers module)
  *   - One automatic retry on 429, honouring Retry-After (capped at 60s)
  *   - Typed exceptions on non-2xx; ``$status`` preserved on the exception
  */

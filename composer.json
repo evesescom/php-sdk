@@ -1,6 +1,6 @@
 {
     "name": "eveses/sdk",
-    "description": "Official Eveses SDK for PHP — activations, wallet, catalog, webhooks.",
+    "description": "Official Eveses SDK for PHP — numbers, proxy, web-unblocker, emails, captcha, wallet, webhooks.",
     "type": "library",
     "license": "MIT",
     "keywords": ["eveses", "sms", "activations", "sdk", "api"],

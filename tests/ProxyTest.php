@@ -61,7 +61,7 @@ final class ProxyTest extends TestCase
         ]);
 
         $this->assertSame('POST', $calls[0]['method']);
-        $this->assertSame('https://x.test/api/account/proxies/purchase', $calls[0]['url']);
+        $this->assertSame('https://x.test/api/v1/proxy/orders', $calls[0]['url']);
         $this->assertSame('idem-px', $calls[0]['headers']['Idempotency-Key']);
         $sent = json_decode((string) $calls[0]['body'], true);
         $this->assertSame(['type' => 'residential', 'gb' => 10, 'subscription' => true], $sent);
@@ -97,7 +97,7 @@ final class ProxyTest extends TestCase
         ]);
         $quote = $this->client($transport)->proxy->quote(['type' => 'residential', 'gb' => 10, 'subscription' => true]);
 
-        $this->assertStringStartsWith('https://x.test/api/account/proxies/quote?', $calls[0]['url']);
+        $this->assertStringStartsWith('https://x.test/api/v1/proxy/quote?', $calls[0]['url']);
         $this->assertStringContainsString('type=residential', $calls[0]['url']);
         $this->assertStringContainsString('gb=10', $calls[0]['url']);
         $this->assertStringContainsString('subscription=true', $calls[0]['url']);
@@ -131,11 +131,11 @@ final class ProxyTest extends TestCase
         $client = $this->client($transport);
 
         $client->proxy->extend('px_1', 30);
-        $this->assertSame('https://x.test/api/account/proxies/px_1/extend', $calls[0]['url']);
+        $this->assertSame('https://x.test/api/v1/proxy/orders/px_1/extend', $calls[0]['url']);
         $this->assertSame(['days' => 30], json_decode((string) $calls[0]['body'], true));
 
         $order = $client->proxy->autoRenew('px_1', true);
-        $this->assertSame('https://x.test/api/account/proxies/px_1/auto-renew', $calls[1]['url']);
+        $this->assertSame('https://x.test/api/v1/proxy/orders/px_1/auto-renew', $calls[1]['url']);
         $this->assertSame(['enabled' => true], json_decode((string) $calls[1]['body'], true));
         $this->assertTrue($order->autoExtend);
     }
@@ -148,7 +148,7 @@ final class ProxyTest extends TestCase
         $sub = $this->client($transport)->proxy->subscriptionPause();
 
         $this->assertSame('POST', $calls[0]['method']);
-        $this->assertSame('https://x.test/api/account/proxies/subscription/pause', $calls[0]['url']);
+        $this->assertSame('https://x.test/api/v1/proxy/subscription/pause', $calls[0]['url']);
         $this->assertSame('paused', $sub->status);
     }
 }

@@ -57,7 +57,7 @@ try {
 
     // `services()` is the global product catalog for the mode; `country`
     // is informational on v1 today.
-    $services = $client->catalog->services(['mode' => 'activation', 'country' => $country]);
+    $services = $client->numbers->services(['mode' => 'activation', 'country' => $country]);
     printf("%d services available (mode=%s)\n", count($services->services), $services->mode);
     if (! in_array($service, $services->services, true)) {
         fwrite(STDERR, "Warning: '{$service}' not in catalog — request may 404.\n");
@@ -68,7 +68,7 @@ try {
     // create() once.
     $idempotencyKey = bin2hex(random_bytes(16));
 
-    $order = $client->activations->create([
+    $order = $client->numbers->create([
         'country' => $country,
         'service' => $service,
         'mode' => 'activation',
@@ -80,7 +80,7 @@ try {
         $order->phone ?? '?',
         $order->status,
     );
-    echo "Next: poll \$client->activations->sms(\$order->orderId) for the code.\n";
+    echo "Next: poll \$client->numbers->sms(\$order->orderId) for the code.\n";
 
 } catch (EvesesAuthException) {
     fwrite(STDERR, "Auth failed — check EVESES_API_KEY (must start with sk_).\n");

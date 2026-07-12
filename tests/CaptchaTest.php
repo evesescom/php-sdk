@@ -65,8 +65,8 @@ final class CaptchaTest extends TestCase
         $this->assertSame(3392, $res->priceMicroUsd);
 
         $this->assertSame('POST', $calls[0]['method']);
-        $this->assertSame('https://x.test/api/account/captcha/solve', $calls[0]['url']);
-        $this->assertSame('https://x.test/api/account/captcha/result/7', $calls[1]['url']);
+        $this->assertSame('https://x.test/api/v1/captcha/solve', $calls[0]['url']);
+        $this->assertSame('https://x.test/api/v1/captcha/result/7', $calls[1]['url']);
     }
 
     public function test_solve_throws_on_failure(): void

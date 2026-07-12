@@ -8,7 +8,7 @@ use Eveses\Sdk\Http\Client;
 
 /**
  * Trial namespace — check and activate free-trial access for one or more
- * product services. Hits ``/api/account/trial/*``.
+ * product services. Hits ``/api/v1/trial/*``.
  */
 final class Trial
 {
@@ -21,7 +21,7 @@ final class Trial
      */
     public function status(): array
     {
-        return (array) $this->http->request('GET', '/api/account/trial');
+        return (array) $this->http->request('GET', '/api/v1/trial');
     }
 
     /**
@@ -32,6 +32,6 @@ final class Trial
      */
     public function subscribe(array $services): array
     {
-        return (array) $this->http->request('POST', '/api/account/trial/subscribe', null, ['services' => $services]);
+        return (array) $this->http->request('POST', '/api/v1/trial/subscribe', null, ['services' => $services]);
     }
 }

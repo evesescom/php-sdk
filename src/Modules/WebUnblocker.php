@@ -8,7 +8,7 @@ use Eveses\Sdk\Http\Client;
 
 /**
  * Web Unblocker namespace — buy and manage request-based web-unblocker access,
- * subscriptions, and free trial. Hits ``/api/account/web-unblocker/*``.
+ * subscriptions, and free trial. Hits ``/api/v1/webunblocker/*``.
  */
 final class WebUnblocker
 {
@@ -19,9 +19,9 @@ final class WebUnblocker
      *
      * @return array<string,mixed>
      */
-    public function packages(): array
+    public function pricing(): array
     {
-        return (array) $this->http->request('GET', '/api/account/web-unblocker/packages');
+        return (array) $this->http->request('GET', '/api/v1/webunblocker/pricing');
     }
 
     /**
@@ -37,7 +37,7 @@ final class WebUnblocker
             $query['subscription'] = '1';
         }
 
-        return (array) $this->http->request('GET', '/api/account/web-unblocker/quote', $query);
+        return (array) $this->http->request('GET', '/api/v1/webunblocker/quote', $query);
     }
 
     /**
@@ -55,7 +55,7 @@ final class WebUnblocker
             $body['subscription'] = true;
         }
 
-        $res = (array) $this->http->request('POST', '/api/account/web-unblocker/purchase', null, $body, $headers);
+        $res = (array) $this->http->request('POST', '/api/v1/webunblocker/orders', null, $body, $headers);
 
         return self::mapAccess($res);
     }
@@ -65,7 +65,7 @@ final class WebUnblocker
      */
     public function trial(): object
     {
-        $res = (array) $this->http->request('POST', '/api/account/web-unblocker/trial');
+        $res = (array) $this->http->request('POST', '/api/v1/webunblocker/trial');
 
         return self::mapAccess($res);
     }
@@ -77,7 +77,7 @@ final class WebUnblocker
      */
     public function access(): array
     {
-        return (array) $this->http->request('GET', '/api/account/web-unblocker');
+        return (array) $this->http->request('GET', '/api/v1/webunblocker/orders');
     }
 
     /** Cancel the web-unblocker subscription (stop auto-renewal). */
@@ -100,7 +100,7 @@ final class WebUnblocker
 
     private function subscriptionAction(string $action): object
     {
-        $res = (array) $this->http->request('POST', '/api/account/web-unblocker/subscription/'.$action);
+        $res = (array) $this->http->request('POST', '/api/v1/webunblocker/subscription/'.$action);
 
         return self::mapSubscription($res);
     }

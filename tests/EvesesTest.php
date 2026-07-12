@@ -71,7 +71,7 @@ final class EvesesTest extends TestCase
             'transport' => $transport,
         ]);
 
-        $res = $client->catalog->countries(['mode' => 'activation']);
+        $res = $client->numbers->countries(['mode' => 'activation']);
 
         $this->assertCount(1, $calls);
         $this->assertSame('GET', $calls[0]['method']);
@@ -95,7 +95,7 @@ final class EvesesTest extends TestCase
             'transport' => $transport,
         ]);
 
-        $res = $client->catalog->services(['mode' => 'activation', 'country' => 'UA', 'currency' => 'usd']);
+        $res = $client->numbers->services(['mode' => 'activation', 'country' => 'UA', 'currency' => 'usd']);
 
         $this->assertSame(
             'https://api.example.test/api/v1/numbers/products?mode=activation',
@@ -140,7 +140,7 @@ final class EvesesTest extends TestCase
             'transport' => $transport,
         ]);
 
-        $res = $client->catalog->pricing([
+        $res = $client->numbers->pricing([
             'mode' => 'activation',
             'country' => 'UA',
             'service' => 'telegram',
@@ -172,7 +172,7 @@ final class EvesesTest extends TestCase
         ]);
 
         $this->expectException(\InvalidArgumentException::class);
-        $client->catalog->pricing(['country' => '', 'service' => 'telegram']);
+        $client->numbers->pricing(['country' => '', 'service' => 'telegram']);
     }
 
     // ---------------------------------------------------------- webhooks --

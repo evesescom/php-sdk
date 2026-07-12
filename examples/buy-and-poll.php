@@ -81,7 +81,7 @@ if (function_exists('pcntl_async_signals')) {
 }
 
 try {
-    $order = $client->activations->create([
+    $order = $client->numbers->create([
         'country' => $country,
         'service' => $service,
         'idempotency_key' => bin2hex(random_bytes(16)),
@@ -96,7 +96,7 @@ try {
         if ($cancel_requested) {
             break;
         }
-        $bundle = $client->activations->sms($order->orderId);
+        $bundle = $client->numbers->sms($order->orderId);
         $messages = dedupe_sms($bundle->stored, $bundle->fresh);
         if ($messages !== []) {
             $sms = $messages[0];
@@ -109,7 +109,7 @@ try {
 
     if ($cancel_requested) {
         try {
-            $client->activations->cancel($order->orderId);
+            $client->numbers->cancel($order->orderId);
             echo "Cancelled cleanly.\n";
         } catch (EvesesException $exc) {
             if ($exc->status === 404) {
@@ -123,12 +123,12 @@ try {
 
     if ($sms === null) {
         echo "Timed out waiting for SMS — cancelling and refunding held balance.\n";
-        $client->activations->cancel($order->orderId);
+        $client->numbers->cancel($order->orderId);
         exit(0);
     }
 
     printf("Got SMS from %s: %s\n", $sms->sender ?? 'unknown', var_export($sms->text, true));
-    $finished = $client->activations->finish($order->orderId);
+    $finished = $client->numbers->finish($order->orderId);
     printf("Order %s finished (status=%s).\n", $finished->orderId, $finished->status);
 
 } catch (EvesesException $exc) {

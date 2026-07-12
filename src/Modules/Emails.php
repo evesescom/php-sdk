@@ -8,25 +8,26 @@ use Eveses\Sdk\Http\Client;
 
 /**
  * Emails namespace — buy and manage temporary/disposable e-mail addresses.
- * Hits ``/api/account/emails/*``.
+ * Hits ``/api/v1/emails/*``.
  */
 final class Emails
 {
     public function __construct(private readonly Client $http) {}
 
     /**
-     * Available e-mail domains, optionally filtered by site.
+     * E-mail price list. Available domains are returned under the ``domains``
+     * key. Optionally filter by site.
      *
      * @return array<string,mixed>
      */
-    public function domains(?string $site = null): array
+    public function pricing(?string $site = null): array
     {
         $query = [];
         if ($site !== null && $site !== '') {
             $query['site'] = $site;
         }
 
-        return (array) $this->http->request('GET', '/api/account/emails/domains', $query ?: null);
+        return (array) $this->http->request('GET', '/api/v1/emails/pricing', $query ?: null);
     }
 
     /**
@@ -44,7 +45,7 @@ final class Emails
             $query['provider'] = $provider;
         }
 
-        return (array) $this->http->request('GET', '/api/account/emails/quote', $query);
+        return (array) $this->http->request('GET', '/api/v1/emails/quote', $query);
     }
 
     /**
@@ -65,7 +66,7 @@ final class Emails
             $body['provider'] = $provider;
         }
 
-        $res = (array) $this->http->request('POST', '/api/account/emails/purchase', null, $body, $headers);
+        $res = (array) $this->http->request('POST', '/api/v1/emails/orders', null, $body, $headers);
 
         return self::mapMailbox($res);
     }
@@ -82,7 +83,7 @@ final class Emails
             $query['include_released'] = '1';
         }
 
-        $res = (array) $this->http->request('GET', '/api/account/emails', $query ?: null);
+        $res = (array) $this->http->request('GET', '/api/v1/emails/orders', $query ?: null);
 
         $items = isset($res['data']) && is_array($res['data']) ? $res['data'] : $res;
 
@@ -97,7 +98,7 @@ final class Emails
      */
     public function get(string $uuid): object
     {
-        $res = (array) $this->http->request('GET', '/api/account/emails/'.rawurlencode($uuid));
+        $res = (array) $this->http->request('GET', '/api/v1/emails/'.rawurlencode($uuid));
 
         return self::mapMailbox($res);
     }
@@ -111,7 +112,7 @@ final class Emails
     {
         return (array) $this->http->request(
             'GET',
-            '/api/account/emails/'.rawurlencode($uuid).'/messages',
+            '/api/v1/emails/'.rawurlencode($uuid).'/messages',
             ['page' => $page, 'per_page' => $perPage],
         );
     }
@@ -125,7 +126,7 @@ final class Emails
     {
         return (array) $this->http->request(
             'POST',
-            '/api/account/emails/'.rawurlencode($uuid).'/messages/'.rawurlencode($messageId).'/read',
+            '/api/v1/emails/'.rawurlencode($uuid).'/messages/'.rawurlencode($messageId).'/read',
         );
     }
 
@@ -136,7 +137,7 @@ final class Emails
      */
     public function release(string $uuid): array
     {
-        return (array) $this->http->request('DELETE', '/api/account/emails/'.rawurlencode($uuid));
+        return (array) $this->http->request('DELETE', '/api/v1/emails/'.rawurlencode($uuid));
     }
 
     /**

@@ -9,7 +9,7 @@ use Eveses\Sdk\Http\Client;
 
 /**
  * Captcha-solving namespace. Resells 2captcha, billed pay-per-use from the
- * wallet (count-on-success). Hits ``/api/account/captcha/*``.
+ * wallet (count-on-success). Hits ``/api/v1/captcha/*``.
  */
 final class Captcha
 {
@@ -47,7 +47,7 @@ final class Captcha
             $body['callback_url'] = (string) $opts['callback_url'];
         }
 
-        $started = (array) $this->http->request('POST', '/api/account/captcha/solve', null, $body, $headers);
+        $started = (array) $this->http->request('POST', '/api/v1/captcha/solve', null, $body, $headers);
 
         $taskId = (int) ($started['task_id'] ?? 0);
         $priceMicroUsd = isset($started['price_micro_usd']) ? (int) $started['price_micro_usd'] : null;
@@ -65,7 +65,7 @@ final class Captcha
         while (true) {
             ($this->sleeper)($retryAfter);
 
-            $res = (array) $this->http->request('GET', '/api/account/captcha/result/'.rawurlencode((string) $taskId));
+            $res = (array) $this->http->request('GET', '/api/v1/captcha/result/'.rawurlencode((string) $taskId));
             $retryAfter = isset($res['retry_after']) ? (int) $res['retry_after'] : $retryAfter;
             $status = (string) ($res['status'] ?? 'processing');
 
@@ -80,6 +80,38 @@ final class Captcha
                 throw new EvesesException("Captcha task {$taskId} timed out before resolving", 0);
             }
         }
+    }
+
+    /**
+     * Per-solve retail rates by captcha type.
+     *
+     * @return array<string,mixed>
+     */
+    public function rates(): array
+    {
+        return (array) $this->http->request('GET', '/api/v1/captcha/rates');
+    }
+
+    /**
+     * Captcha task history (cursor-paginated). Replaces any "orders" notion
+     * for captcha.
+     *
+     * @param  array{status?:string, type?:string, cursor?:string, limit?:int}  $opts
+     * @return array<string,mixed>
+     */
+    public function usage(array $opts = []): array
+    {
+        $query = [];
+        foreach (['status', 'type', 'cursor'] as $k) {
+            if (isset($opts[$k]) && is_string($opts[$k]) && $opts[$k] !== '') {
+                $query[$k] = $opts[$k];
+            }
+        }
+        if (isset($opts['limit'])) {
+            $query['limit'] = (int) $opts['limit'];
+        }
+
+        return (array) $this->http->request('GET', '/api/v1/captcha/usage', $query ?: null);
     }
 
     private function finalise(int $taskId, string $status, ?string $solution, ?string $error, ?int $priceMicroUsd): object

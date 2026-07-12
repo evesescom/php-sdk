@@ -6,12 +6,14 @@ namespace Eveses\Sdk;
 
 use Eveses\Sdk\Exceptions\EvesesException;
 use Eveses\Sdk\Http\Client;
-use Eveses\Sdk\Modules\Activations;
+use Eveses\Sdk\Modules\Account;
 use Eveses\Sdk\Modules\Captcha;
-use Eveses\Sdk\Modules\Catalog;
 use Eveses\Sdk\Modules\Emails;
-use Eveses\Sdk\Modules\Fingerprints;
+use Eveses\Sdk\Modules\Numbers;
+use Eveses\Sdk\Modules\Orders;
+use Eveses\Sdk\Modules\Pricing;
 use Eveses\Sdk\Modules\Proxy;
+use Eveses\Sdk\Modules\Quotas;
 use Eveses\Sdk\Modules\Trial;
 use Eveses\Sdk\Modules\Wallet;
 use Eveses\Sdk\Modules\Webhooks;
@@ -20,14 +22,15 @@ use Eveses\Sdk\Modules\WebUnblocker;
 /**
  * Eveses SDK client.
  *
- * Mirrors the surface of the JS / Python SDKs: ``activations``, ``wallet``,
- * ``catalog`` modules + a static ``Webhooks::verify`` for signature checks.
+ * Mirrors the surface of the JS / Python SDKs: ``numbers``, ``wallet``,
+ * ``orders``, ``pricing``, ``quotas`` modules + a static ``Webhooks::verify``
+ * for signature checks.
  *
  *   $client = new Eveses\Sdk\Eveses(['api_key' => getenv('EVESES_API_KEY')]);
- *   $order  = $client->activations->create(['country' => 'ua', 'service' => 'telegram']);
- *   $sms    = $client->activations->sms($order->orderId);
+ *   $order  = $client->numbers->create(['country' => 'ua', 'service' => 'telegram']);
+ *   $sms    = $client->numbers->sms($order->orderId);
  *   $bal    = $client->wallet->balance();
- *   $svcs   = $client->catalog->services(['mode' => 'activation', 'country' => 'ua']);
+ *   $svcs   = $client->numbers->services(['mode' => 'activation', 'country' => 'ua']);
  *
  * Construction options (array key => meaning):
  *   - ``api_key``         (string, required) Sanctum personal-access token (kind=api_key).
@@ -39,27 +42,31 @@ use Eveses\Sdk\Modules\WebUnblocker;
  */
 final class Eveses
 {
-    public const VERSION = '0.3.0';
+    public const VERSION = '0.4.0';
 
     private const DEFAULT_BASE_URL = 'https://api.eveses.com';
 
     private const DEFAULT_TIMEOUT_S = 30;
 
-    private const DEFAULT_USER_AGENT = 'eveses-php/0.3.0';
+    private const DEFAULT_USER_AGENT = 'eveses-php/0.4.0';
 
-    public readonly Activations $activations;
+    public readonly Numbers $numbers;
 
     public readonly Wallet $wallet;
 
-    public readonly Catalog $catalog;
+    public readonly Account $account;
 
     public readonly Captcha $captcha;
 
     public readonly Emails $emails;
 
-    public readonly Fingerprints $fingerprints;
+    public readonly Orders $orders;
+
+    public readonly Pricing $pricing;
 
     public readonly Proxy $proxy;
+
+    public readonly Quotas $quotas;
 
     public readonly Trial $trial;
 
@@ -93,13 +100,15 @@ final class Eveses
             transport: $opts['transport'] ?? null,
         );
 
-        $this->activations = new Activations($this->http);
+        $this->numbers = new Numbers($this->http);
         $this->wallet = new Wallet($this->http);
-        $this->catalog = new Catalog($this->http);
+        $this->account = new Account($this->http);
         $this->captcha = new Captcha($this->http);
         $this->emails = new Emails($this->http);
-        $this->fingerprints = new Fingerprints($this->http);
+        $this->orders = new Orders($this->http);
+        $this->pricing = new Pricing($this->http);
         $this->proxy = new Proxy($this->http);
+        $this->quotas = new Quotas($this->http);
         $this->trial = new Trial($this->http);
         $this->webUnblocker = new WebUnblocker($this->http);
     }

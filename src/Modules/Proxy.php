@@ -9,7 +9,7 @@ use Eveses\Sdk\Http\Client;
 /**
  * Proxy namespace — buy and manage residential (metered, per-GB) and static
  * (per-IP: ISP / datacenter / IPv6 / sneaker / mobile) proxies. Hits
- * ``/api/account/proxies/*``.
+ * ``/api/v1/proxy/*``.
  *
  * The provider stays invisible: connection details are returned under the
  * white-label host.
@@ -19,33 +19,13 @@ final class Proxy
     public function __construct(private readonly Client $http) {}
 
     /**
-     * Residential GB package ladder (price, per-GB, discount).
+     * Consolidated price list (residential GB ladder + static per-IP catalogue).
      *
      * @return array<string,mixed>
      */
-    public function packages(): array
+    public function pricing(): array
     {
-        return (array) $this->http->request('GET', '/api/account/proxies/packages');
-    }
-
-    /**
-     * White-label connection endpoints: regional entry subdomains + HTTP/SOCKS5 ports.
-     *
-     * @return array<string,mixed>
-     */
-    public function endpoints(): array
-    {
-        return (array) $this->http->request('GET', '/api/account/proxies/endpoints');
-    }
-
-    /**
-     * Static (per-IP) catalogue — products/plans/locations with user prices.
-     *
-     * @return array<string,mixed>
-     */
-    public function catalog(): array
-    {
-        return (array) $this->http->request('GET', '/api/account/proxies/catalog');
+        return (array) $this->http->request('GET', '/api/v1/proxy/pricing');
     }
 
     /**
@@ -56,7 +36,7 @@ final class Proxy
      */
     public function locations(string $type = 'residential'): array
     {
-        return (array) $this->http->request('GET', '/api/account/proxies/locations', ['type' => $type]);
+        return (array) $this->http->request('GET', '/api/v1/proxy/locations', ['type' => $type]);
     }
 
     /**
@@ -89,7 +69,7 @@ final class Proxy
             $query['quantity'] = (int) ($opts['quantity'] ?? 1);
         }
 
-        return (array) $this->http->request('GET', '/api/account/proxies/quote', $query);
+        return (array) $this->http->request('GET', '/api/v1/proxy/quote', $query);
     }
 
     /**
@@ -131,7 +111,7 @@ final class Proxy
             $body['quantity'] = (int) ($opts['quantity'] ?? 1);
         }
 
-        $res = (array) $this->http->request('POST', '/api/account/proxies/purchase', null, $body, $headers);
+        $res = (array) $this->http->request('POST', '/api/v1/proxy/orders', null, $body, $headers);
 
         return self::mapOrder($res);
     }
@@ -142,7 +122,7 @@ final class Proxy
      */
     public function list(): object
     {
-        $res = (array) $this->http->request('GET', '/api/account/proxies');
+        $res = (array) $this->http->request('GET', '/api/v1/proxy/orders');
 
         $residential = isset($res['residential']) && is_array($res['residential']) ? (object) $res['residential'] : null;
         $subscription = isset($res['subscription']) && is_array($res['subscription'])
@@ -162,13 +142,23 @@ final class Proxy
     }
 
     /**
+     * Show a single per-IP order by UUID.
+     */
+    public function get(string $orderUuid): object
+    {
+        $res = (array) $this->http->request('GET', '/api/v1/proxy/orders/'.rawurlencode($orderUuid));
+
+        return self::mapOrder($res);
+    }
+
+    /**
      * Extend a static (per-IP) order for another period (re-charges its price).
      */
     public function extend(string $orderUuid, int $days = 30): object
     {
         $res = (array) $this->http->request(
             'POST',
-            '/api/account/proxies/'.rawurlencode($orderUuid).'/extend',
+            '/api/v1/proxy/orders/'.rawurlencode($orderUuid).'/extend',
             null,
             ['days' => $days],
         );
@@ -181,7 +171,7 @@ final class Proxy
     {
         $res = (array) $this->http->request(
             'POST',
-            '/api/account/proxies/'.rawurlencode($orderUuid).'/auto-renew',
+            '/api/v1/proxy/orders/'.rawurlencode($orderUuid).'/auto-renew',
             null,
             ['enabled' => $enabled],
         );
@@ -196,7 +186,7 @@ final class Proxy
      */
     public function resetSessions(): array
     {
-        return (array) $this->http->request('POST', '/api/account/proxies/sessions/reset');
+        return (array) $this->http->request('POST', '/api/v1/proxy/sessions/reset');
     }
 
     /**
@@ -215,7 +205,7 @@ final class Proxy
             $query['to'] = (string) $opts['to'];
         }
 
-        return (array) $this->http->request('GET', '/api/account/proxies/usage', $query ?: null);
+        return (array) $this->http->request('GET', '/api/v1/proxy/usage', $query ?: null);
     }
 
     /**
@@ -225,7 +215,7 @@ final class Proxy
      */
     public function trial(): array
     {
-        return (array) $this->http->request('POST', '/api/account/proxies/trial');
+        return (array) $this->http->request('POST', '/api/v1/proxy/trial');
     }
 
     /** Cancel the residential subscription (stop auto-renewal; traffic stays). */
@@ -248,7 +238,7 @@ final class Proxy
 
     private function subscriptionAction(string $action): object
     {
-        $res = (array) $this->http->request('POST', '/api/account/proxies/subscription/'.$action);
+        $res = (array) $this->http->request('POST', '/api/v1/proxy/subscription/'.$action);
 
         return self::mapSubscription($res);
     }

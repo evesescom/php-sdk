@@ -1,9 +1,10 @@
 # eveses/sdk (PHP SDK)
 
 Official PHP SDK for the [Eveses](https://eveses.com) developer API.
-Activations, wallet, catalog (countries / services / pricing), proxies,
-web-unblocker, temporary emails, captcha-solving, fingerprints, free trials,
-and webhook signature verification.
+Numbers (SMS orders + catalog), wallet, proxies, web-unblocker, temporary
+emails, captcha-solving, free trials, cross-product order history,
+aggregate pricing / quotas, account (`me`), and webhook signature
+verification. Every authenticated call targets the `/api/v1/*` surface.
 
 Zero runtime dependencies — uses PHP's built-in `ext-curl` and `ext-json`.
 PHP 8.1+ with strict types throughout.
@@ -29,8 +30,8 @@ use Eveses\Sdk\Eveses;
 
 $client = new Eveses(['api_key' => getenv('EVESES_API_KEY')]);
 
-$order  = $client->activations->create(['country' => 'ua', 'service' => 'telegram']);
-$sms    = $client->activations->sms($order->orderId);
+$order  = $client->numbers->create(['country' => 'ua', 'service' => 'telegram']);
+$sms    = $client->numbers->sms($order->orderId);
 $wallet = $client->wallet->balance();
 echo $order->orderId, ' / ', $wallet->availableBalance, ' ', $wallet->currency, PHP_EOL;
 ```
@@ -43,10 +44,15 @@ personal-access token with `kind=api_key`.
 
 Recommended: load the key from an environment variable, never check it in.
 
-## Activations
+## Numbers (SMS orders + catalog)
+
+One consolidated module for the whole SMS surface — order lifecycle **and**
+the read-only catalog that drives order-creation UX. All calls hit
+`/api/v1/numbers/*`.
 
 ```php
-$order = $client->activations->create([
+// Order lifecycle
+$order = $client->numbers->create([
     'country'           => 'ua',
     'service'           => 'telegram',
     'mode'              => 'activation',         // or 'rent'
@@ -55,33 +61,31 @@ $order = $client->activations->create([
     'idempotency_key'   => 'my-uuid',             // also sent as Idempotency-Key header
 ]);
 
-$fresh = $client->activations->get($order->orderId);
-$sms   = $client->activations->sms($order->orderId);
+$fresh = $client->numbers->get($order->orderId);
+$sms   = $client->numbers->sms($order->orderId);
 //   $sms->stored — delivered to us via upstream webhook
 //   $sms->fresh  — pulled from upstream provider on demand
 
-$client->activations->cancel($order->orderId);   // refund-where-supported
-$client->activations->finish($order->orderId);   // mark consumed
-```
+$client->numbers->cancel($order->orderId);       // refund-where-supported
+$client->numbers->finish($order->orderId);       // mark consumed
+$client->numbers->retry($order->orderId);        // ask for another code on the same number
+$client->numbers->repeat($order->orderId);       // fresh order for the same target
+$client->numbers->autoRenew($order->orderId, true); // rentals: toggle auto-renew
 
-## Wallet
+$client->numbers->batch([                         // create several at once
+    ['country' => 'ua', 'service' => 'telegram'],
+    ['country' => 'pl', 'service' => 'whatsapp'],
+], ['idempotency_key' => 'batch-uuid']);
 
-```php
-$wallet = $client->wallet->balance();
-// $wallet->balance / heldBalance / availableBalance — integers in cents
-// $wallet->currency — ISO-4217, e.g. "USD"
-```
+$list    = $client->numbers->list(['status' => 'active']);   // GET /api/v1/numbers/orders
+$summary = $client->numbers->summary();                       // GET /api/v1/numbers/orders/summary
 
-## Catalog (countries / services / pricing)
-
-Read-only metadata for driving order-creation UX. All three calls hit the
-API-key-authenticated `/api/v1/numbers/*` routes, so the same Bearer token
-that creates orders can populate selectors and price tables.
-
-```php
-$countries = $client->catalog->countries(['mode' => 'activation'])->countries;
-$services  = $client->catalog->services(['mode' => 'activation', 'country' => 'ua'])->services;
-$pricing   = $client->catalog->pricing([
+// Catalog
+$countries = $client->numbers->countries(['mode' => 'activation'])->countries;
+$services  = $client->numbers->services(['mode' => 'activation', 'country' => 'ua'])->services;
+$carriers  = $client->numbers->carriers(['mode' => 'activation', 'country' => 'us']);
+$states    = $client->numbers->states(['mode' => 'activation', 'country' => 'us']);
+$pricing   = $client->numbers->pricing([
     'mode'    => 'activation',
     'country' => 'ua',
     'service' => 'telegram',
@@ -92,6 +96,25 @@ $pricing   = $client->catalog->pricing([
 `mode` accepts `'activation'` or `'rent'`. For rentals, pass
 `'duration_minutes' => N` to `pricing()` to filter to a single duration.
 
+## Wallet
+
+```php
+$wallet = $client->wallet->balance();
+// $wallet->balance / heldBalance / availableBalance — integers in cents
+// $wallet->currency — ISO-4217, e.g. "USD"
+```
+
+## Account (`me`)
+
+```php
+$me = $client->account->me();
+// $me->abilities — what THIS token can do, e.g. ["*"]
+// $me->features  — product flags: $me->features->proxy, ->captcha, …
+// $me->raw       — the full me payload
+```
+
+Use `$me->features` to gate product entry points instead of hardcoding flags.
+
 ## Proxies
 
 Buy and manage residential (metered, per-GB) and static (per-IP: ISP /
@@ -100,14 +123,12 @@ invisible — connection details come back under the white-label host.
 
 ```php
 // Browse
-$packages  = $client->proxy->packages();                    // residential GB ladder
-$endpoints = $client->proxy->endpoints();                   // white-label entry hosts + ports
-$catalog   = $client->proxy->catalog();                     // static (per-IP) products/plans
+$pricing   = $client->proxy->pricing();                     // residential GB ladder + static catalogue
 $locations = $client->proxy->locations('residential');      // targeting for a type
 
 // Estimate then buy
 $quote = $client->proxy->quote(['type' => 'residential', 'gb' => 5]);
-$order = $client->proxy->purchase([
+$order = $client->proxy->purchase([                          // POST /api/v1/proxy/orders
     'type'            => 'residential',
     'gb'              => 5,
     'subscription'    => false,
@@ -123,7 +144,8 @@ $order = $client->proxy->purchase([
 ]);
 
 // Manage
-$mine = $client->proxy->list();                             // residential + subscription + per-IP orders
+$mine = $client->proxy->list();                             // GET /api/v1/proxy/orders
+$one  = $client->proxy->get($order->uuid);                 // GET /api/v1/proxy/orders/{uuid}
 $client->proxy->extend($order->uuid, 30);                  // re-charge a per-IP order
 $client->proxy->autoRenew($order->uuid, true);             // toggle auto_extend
 $client->proxy->resetSessions();                           // rotate residential sticky IPs
@@ -141,7 +163,7 @@ $client->proxy->subscriptionCancel();
 Request-based web-unblocker access, subscriptions, and a free trial.
 
 ```php
-$packages = $client->webUnblocker->packages();
+$pricing  = $client->webUnblocker->pricing();
 $quote    = $client->webUnblocker->quote(1000, subscription: false);
 
 $access = $client->webUnblocker->purchase(1000, subscription: false, idempotencyKey: 'my-uuid');
@@ -161,7 +183,7 @@ Buy and manage temporary / disposable email inboxes, then poll them for
 messages.
 
 ```php
-$domains = $client->emails->domains();                      // optionally ->domains('site.com')
+$pricing = $client->emails->pricing();                      // domains under the `domains` key; ->pricing('site.com')
 $quote   = $client->emails->quote('example.com');
 
 $mailbox = $client->emails->purchase('example.com', idempotencyKey: 'my-uuid');
@@ -194,16 +216,25 @@ $result = $client->captcha->solve('recaptcha_v2', [
 
 A `failed` task or a timeout throws `Eveses\Sdk\Exceptions\EvesesException`.
 
-## Fingerprints
+```php
+$rates = $client->captcha->rates();                         // per-solve retail rates by type
+$usage = $client->captcha->usage(['status' => 'ready']);    // cursor-paginated task history
+```
 
-Resells 2captcha's Fingerprint API, billed pay-per-use from the wallet
-(count-on-success). Unlike captcha solving this is synchronous — one request
-returns a complete fingerprint.
+## Orders, pricing & quotas (aggregate)
+
+Cross-product views for unified dashboards.
 
 ```php
-$out = $client->fingerprints->generate(['os' => 'windows', 'browser' => 'chrome']);
-$out = $client->fingerprints->random();                     // random, optionally filtered
-// $out->fingerprint (array) / $out->priceMicroUsd
+// Global order history (normalized OrderView; captcha excluded → see usage())
+$feed = $client->orders->list(['service' => 'proxy', 'limit' => 50]);
+$one  = $client->orders->get($uuid);                        // GET /api/v1/orders/{uuid}
+
+// All prices in one call
+$prices = $client->pricing->all();                          // GET /api/v1/pricing
+
+// Remaining prepaid balances (only products with a decrementing counter)
+$quotas = $client->quotas->all();                           // GET /api/v1/quotas
 ```
 
 ## Trials
@@ -281,31 +312,30 @@ will still capture every SDK-thrown error.
 
 ## API surface vs OpenAPI
 
-The Eveses public OpenAPI spec exposes the customer-facing endpoints under
-`/api/account/*` (legacy account scope) and `/api/v1/numbers/*` (new
-versioned public API). For API-key consumers, the v1 surface is currently
-a thin wrapper around the same controllers — orders and wallet are still
-served from `/api/account/*`. This SDK targets:
+Every authenticated call targets the consolidated `/api/v1/*` surface. This
+SDK maps to it as follows:
 
-| OpenAPI route                                | SDK call                               |
+| v1 route                                     | SDK call                               |
 | -------------------------------------------- | -------------------------------------- |
-| `POST   /api/account/orders`                 | `$client->activations->create([...])`  |
-| `GET    /api/account/orders/{uuid}`          | `$client->activations->get($id)`       |
-| `GET    /api/account/orders/{uuid}/sms`      | `$client->activations->sms($id)`       |
-| `POST   /api/account/orders/{uuid}/cancel`   | `$client->activations->cancel($id)`    |
-| `POST   /api/account/orders/{uuid}/finish`   | `$client->activations->finish($id)`    |
-| `GET    /api/account/wallet`                 | `$client->wallet->balance()`           |
-| `GET    /api/v1/numbers/countries`           | `$client->catalog->countries([...])`   |
-| `GET    /api/v1/numbers/products`            | `$client->catalog->services([...])`    |
-| `GET    /api/v1/numbers/pricing`             | `$client->catalog->pricing([...])`     |
-| `GET    /api/account/proxies*`               | `$client->proxy->…`                    |
-| `POST   /api/account/proxies/purchase`       | `$client->proxy->purchase([...])`      |
-| `GET    /api/account/web-unblocker*`         | `$client->webUnblocker->…`             |
-| `GET    /api/account/emails*`                | `$client->emails->…`                   |
-| `POST   /api/account/captcha/solve`          | `$client->captcha->solve(...)`         |
-| `POST   /api/account/fingerprints/*`         | `$client->fingerprints->…`             |
-| `GET    /api/account/trial`                  | `$client->trial->status()`             |
-| `POST   /api/account/trial/subscribe`        | `$client->trial->subscribe([...])`     |
+| `POST   /api/v1/numbers/orders`              | `$client->numbers->create([...])`      |
+| `GET    /api/v1/numbers/orders/{uuid}`       | `$client->numbers->get($id)`           |
+| `GET    /api/v1/numbers/orders/{uuid}/sms`   | `$client->numbers->sms($id)`           |
+| `POST   /api/v1/numbers/orders/{uuid}/{cancel,finish,retry,repeat,auto-renew}` | `$client->numbers->{cancel,finish,retry,repeat,autoRenew}($id)` |
+| `POST   /api/v1/numbers/orders/batch`        | `$client->numbers->batch([...])`       |
+| `GET    /api/v1/numbers/orders(/summary)`    | `$client->numbers->list()` / `summary()` |
+| `GET    /api/v1/numbers/{countries,products,carriers,states,pricing}` | `$client->numbers->{countries,services,carriers,states,pricing}([...])` |
+| `GET    /api/v1/wallet`                       | `$client->wallet->balance()`           |
+| `GET    /api/v1/me`                           | `$client->account->me()`               |
+| `/api/v1/proxy/*` (buy `POST /orders`)        | `$client->proxy->…`                    |
+| `/api/v1/webunblocker/*` (buy `POST /orders`) | `$client->webUnblocker->…`             |
+| `/api/v1/emails/*` (buy `POST /orders`)       | `$client->emails->…`                   |
+| `POST   /api/v1/captcha/solve`                | `$client->captcha->solve(...)`         |
+| `GET    /api/v1/captcha/{rates,usage}`        | `$client->captcha->{rates,usage}()`    |
+| `GET    /api/v1/orders(/{uuid})`              | `$client->orders->list()` / `get($id)` |
+| `GET    /api/v1/pricing`                      | `$client->pricing->all()`              |
+| `GET    /api/v1/quotas`                       | `$client->quotas->all()`               |
+| `GET    /api/v1/trial`                        | `$client->trial->status()`             |
+| `POST   /api/v1/trial/subscribe`              | `$client->trial->subscribe([...])`     |
 | _(webhook deliveries)_                       | `Webhooks::verify(...)`                |
 
 ## Configuration
@@ -332,6 +362,38 @@ The test suite uses a tiny callable transport hook for HTTP — no Guzzle,
 no Mockery, no networking. See `tests/EvesesTest.php`.
 
 ## Changelog
+
+### 0.4.0
+
+- **Repointed the whole SDK to the `/api/v1/*` surface.** Every authenticated
+  request path moved off `/api/account/*` onto the consolidated v1 routes.
+- **New `numbers` module** — merges the old `activations` + `catalog`
+  modules into one. Orders: `create`, `get`, `sms`, `cancel`, `finish`,
+  `retry`, `repeat`, `autoRenew`, `batch`, `list`, `summary` under
+  `/api/v1/numbers/orders`; catalog: `countries`, `services` (`products`),
+  `carriers`, `states`, `pricing` under `/api/v1/numbers/*`.
+- **`proxy`** now hits `/api/v1/proxy/*` — buy via `POST /orders`, list
+  `/orders`, show `/orders/{uuid}`, extend/`autoRenew` under
+  `/orders/{uuid}`, plus `pricing`, `quote`, `locations`, `usage`, `trial`,
+  `resetSessions`, and subscription lifecycle. (`packages`, `endpoints`,
+  `catalog` removed → `pricing`.)
+- **`webUnblocker`** now hits `/api/v1/webunblocker/*` (de-hyphenated) — buy
+  via `POST /orders`, list `/orders`, `pricing` (was `packages`), plus
+  `quote`, `trial`, subscription lifecycle.
+- **`emails`** now hits `/api/v1/emails/*` — buy via `POST /orders`, list
+  `/orders`, `pricing` (domains under the `domains` key; was `domains`),
+  inbox routes unchanged in shape.
+- **`captcha`** keeps `solve`/result and gains `rates()` and `usage()`
+  (`GET /api/v1/captcha/usage`).
+- **New `orders` module** — global cross-product order history
+  (`GET /api/v1/orders(/{uuid})`).
+- **New `pricing` module** — all prices in one call (`GET /api/v1/pricing`).
+- **New `quotas` module** — remaining prepaid balances
+  (`GET /api/v1/quotas`).
+- **New `account` module** — `me()` now exposes `abilities` + `features`
+  (`GET /api/v1/me`).
+- **`wallet`** and **`trial`** repointed to `/api/v1/*`.
+- **Removed the `fingerprints` module** — the product is gone.
 
 ### 0.3.0
 
