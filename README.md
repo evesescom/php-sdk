@@ -126,6 +126,8 @@ invisible — connection details come back under the white-label host.
 // Browse
 $pricing   = $client->proxy->pricing();                     // residential GB ladder + static catalogue
 $locations = $client->proxy->locations('residential');      // targeting for a type
+$geo       = $client->proxy->locationsDetail('us');         // per-country state/city/ISP picker
+// $geo['geo']['states'] / ['cities'] / ['tokens'] — drill into a residential country
 
 // Estimate then buy
 $quote = $client->proxy->quote(['type' => 'residential', 'gb' => 5]);
@@ -157,6 +159,63 @@ $client->proxy->trial();                                    // free proxy trial 
 $client->proxy->subscriptionPause();
 $client->proxy->subscriptionResume();
 $client->proxy->subscriptionCancel();
+```
+
+## Marketplace
+
+Browse and buy normalized digital goods (e.g. accounts) while the upstream
+provider stays invisible. Attributes are normalized across providers so you
+never branch on who fulfilled the order: `country` (ISO-2 uppercase or a
+region slug), `origin` (`autoreg` | `selfreg` | `real` | `retrieve`),
+`format` (`tdata` | `session_json` | `session`), and `twofa` (bool). Public
+discovery lives under `/api/public/marketplace/*`; ordering under
+`/api/v1/marketplace/*`.
+
+```php
+// Discovery (public)
+$categories = $client->marketplace->categories();           // available categories
+$facets     = $client->marketplace->filters('accounts');    // filter facets for a category
+
+// Catalog — plain listing (group_by defaults to 'country' when omitted)
+$plain = $client->marketplace->catalog([
+    'category' => 'accounts',
+    'country'  => 'US',
+    'origin'   => 'autoreg',
+]);
+// plain listing → $plain['items'] — one entry per buyable SKU
+
+// Catalog — attribute-grouped (same-type products collapse into groups)
+$grouped = $client->marketplace->catalog([
+    'category' => 'accounts',
+    'country'  => 'US',
+    'origin'   => 'autoreg',
+    'group_by' => 'attributes',                              // 'country' | 'attributes'
+]);
+// attributes-grouped → $grouped['groups']; each group carries
+//   ['prices_cents']    — the price variants collapsed into the group
+//   ['has_attributes']  — whether the group exposes normalized attributes
+```
+
+`group_by` accepts `'country'` (the default) or `'attributes'`. Use
+`'attributes'` when you want same-type products merged into a single group
+with its `prices_cents` variants; the plain form returns a flat `items`
+list instead.
+
+```php
+// Purchase flow
+$quote = $client->marketplace->quote('accounts', 'acc-us-autoreg-tdata');
+
+$order = $client->marketplace->buy(
+    'accounts',                                              // category
+    'acc-us-autoreg-tdata',                                 // sku
+    1,                                                       // quantity
+    ['note' => 'for project X'],                            // provider-agnostic inputs
+    'my-uuid',                                              // idempotency key (Idempotency-Key header)
+);
+
+$mine  = $client->marketplace->orders();                    // this account's marketplace orders
+$one   = $client->marketplace->order($order['uuid']);       // a single order by UUID
+$goods = $client->marketplace->reveal($order['uuid']);      // reveal the delivered goods
 ```
 
 ## Web Unblocker
@@ -366,6 +425,10 @@ The test suite uses a tiny callable transport hook for HTTP — no Guzzle,
 no Mockery, no networking. See `tests/EvesesTest.php`.
 
 ## Changelog
+
+### 0.5.1
+
+- Docs: added a Marketplace usage section to the README; patch release.
 
 ### 0.5.0
 

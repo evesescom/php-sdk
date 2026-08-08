@@ -43,13 +43,13 @@ use Eveses\Sdk\Modules\WebUnblocker;
  */
 final class Eveses
 {
-    public const VERSION = '0.5.0';
+    public const VERSION = '0.5.1';
 
     private const DEFAULT_BASE_URL = 'https://api.eveses.com';
 
     private const DEFAULT_TIMEOUT_S = 30;
 
-    private const DEFAULT_USER_AGENT = 'eveses-php/0.5.0';
+    private const DEFAULT_USER_AGENT = 'eveses-php/0.5.1';
 
     public readonly Numbers $numbers;
 
