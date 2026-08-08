@@ -1,12 +1,14 @@
 # `eveses/sdk` (PHP) — examples
 
-Three runnable scripts that exercise the SDK end-to-end. PHP 8.3+, no
+Five runnable scripts that exercise the SDK end-to-end. PHP 8.3+, no
 framework, just `require_once 'vendor/autoload.php'`.
 
 | File | What it shows |
 | --- | --- |
 | `quickstart.php` | Construct the client, check wallet balance, list services, buy ONE activation with an idempotency key. |
 | `buy-and-poll.php` | Full activation lifecycle: create → poll SMS every 5s for 5 min → `finish()` (or `cancel()` on Ctrl-C / timeout). |
+| `marketplace.php` | Browse the marketplace: filter facets, categories, and a catalog grouped by attributes with `prices_cents` (buy + reveal commented out). |
+| `proxy-locations.php` | Residential proxy geo: list targeting then drill into one country with `locationsDetail()` for states/cities. |
 | `webhook-server.php` | Minimal HTTP endpoint (PHP's built-in dev server) that verifies `X-Eveses-Signature` with `Webhooks::verify` and prints the parsed payload. |
 
 ## Prerequisites
@@ -27,5 +29,7 @@ Run any example:
 ```bash
 php examples/quickstart.php
 php examples/buy-and-poll.php
+php examples/marketplace.php
+php examples/proxy-locations.php
 php -S 0.0.0.0:8787 examples/webhook-server.php   # webhook receiver
 ```

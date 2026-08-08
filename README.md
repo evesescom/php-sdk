@@ -2,9 +2,10 @@
 
 Official PHP SDK for the [Eveses](https://eveses.com) developer API.
 Numbers (SMS orders + catalog), wallet, proxies, web-unblocker, temporary
-emails, captcha-solving, free trials, cross-product order history,
-aggregate pricing / quotas, account (`me`), and webhook signature
-verification. Every authenticated call targets the `/api/v1/*` surface.
+emails, captcha-solving, marketplace (digital goods), free trials,
+cross-product order history, aggregate pricing / quotas, account (`me`),
+and webhook signature verification. Every authenticated call targets the
+`/api/v1/*` surface.
 
 Zero runtime dependencies — uses PHP's built-in `ext-curl` and `ext-json`.
 PHP 8.1+ with strict types throughout.
@@ -329,6 +330,9 @@ SDK maps to it as follows:
 | `/api/v1/proxy/*` (buy `POST /orders`)        | `$client->proxy->…`                    |
 | `/api/v1/webunblocker/*` (buy `POST /orders`) | `$client->webUnblocker->…`             |
 | `/api/v1/emails/*` (buy `POST /orders`)       | `$client->emails->…`                   |
+| `GET    /api/v1/proxy/locations/detail`       | `$client->proxy->locationsDetail($c)`  |
+| `/api/public/marketplace/{catalog,categories,filters}` | `$client->marketplace->{catalog,categories,filters}(...)` |
+| `/api/v1/marketplace/{quote,buy,orders,orders/{uuid},orders/{uuid}/reveal}` | `$client->marketplace->{quote,buy,orders,order,reveal}(...)` |
 | `POST   /api/v1/captcha/solve`                | `$client->captcha->solve(...)`         |
 | `GET    /api/v1/captcha/{rates,usage}`        | `$client->captcha->{rates,usage}()`    |
 | `GET    /api/v1/orders(/{uuid})`              | `$client->orders->list()` / `get($id)` |
@@ -362,6 +366,20 @@ The test suite uses a tiny callable transport hook for HTTP — no Guzzle,
 no Mockery, no networking. See `tests/EvesesTest.php`.
 
 ## Changelog
+
+### 0.5.0
+
+- **New `marketplace` module** — browse and buy normalized digital goods
+  (e.g. accounts) while the upstream provider stays hidden. Browse:
+  `catalog`, `categories`, `filters` (public discovery); purchase: `quote`,
+  `buy`, `orders`, `order`, `reveal`. The public catalog supports attribute
+  filters (`country` / `origin` / `format` / `twofa`) and `group_by` =
+  `country` | `attributes` (same-type products collapse into groups with
+  `prices_cents` variants).
+- **New `proxy->locationsDetail($country, $type)`** — per-country
+  residential state/city/ISP geo drill-down
+  (`GET /api/v1/proxy/locations/detail`).
+- **Default user-agent bumped to `eveses-php/0.5.0`.**
 
 ### 0.4.0
 
