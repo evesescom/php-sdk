@@ -9,6 +9,7 @@ use Eveses\Sdk\Http\Client;
 use Eveses\Sdk\Modules\Account;
 use Eveses\Sdk\Modules\Captcha;
 use Eveses\Sdk\Modules\Emails;
+use Eveses\Sdk\Modules\Marketplace;
 use Eveses\Sdk\Modules\Numbers;
 use Eveses\Sdk\Modules\Orders;
 use Eveses\Sdk\Modules\Pricing;
@@ -42,13 +43,13 @@ use Eveses\Sdk\Modules\WebUnblocker;
  */
 final class Eveses
 {
-    public const VERSION = '0.4.0';
+    public const VERSION = '0.5.0';
 
     private const DEFAULT_BASE_URL = 'https://api.eveses.com';
 
     private const DEFAULT_TIMEOUT_S = 30;
 
-    private const DEFAULT_USER_AGENT = 'eveses-php/0.4.0';
+    private const DEFAULT_USER_AGENT = 'eveses-php/0.5.0';
 
     public readonly Numbers $numbers;
 
@@ -65,6 +66,8 @@ final class Eveses
     public readonly Pricing $pricing;
 
     public readonly Proxy $proxy;
+
+    public readonly Marketplace $marketplace;
 
     public readonly Quotas $quotas;
 
@@ -108,6 +111,7 @@ final class Eveses
         $this->orders = new Orders($this->http);
         $this->pricing = new Pricing($this->http);
         $this->proxy = new Proxy($this->http);
+        $this->marketplace = new Marketplace($this->http);
         $this->quotas = new Quotas($this->http);
         $this->trial = new Trial($this->http);
         $this->webUnblocker = new WebUnblocker($this->http);

@@ -40,6 +40,19 @@ final class Proxy
     }
 
     /**
+     * Per-country residential state/city/ISP geo drill-down.
+     *
+     * Returns ``{type, country, geo:{country, states:[{code,name,cities?}],
+     * cities:[{code,name,isps?}], tokens:{country,city,state,isp}}}``.
+     *
+     * @return array<string,mixed>
+     */
+    public function locationsDetail(string $country, string $type = 'residential'): array
+    {
+        return (array) $this->http->request('GET', '/api/v1/proxy/locations/detail', ['type' => $type, 'country' => $country]);
+    }
+
+    /**
      * Estimate a purchase before buying (residential GB or a static selection).
      *
      * @param array{
