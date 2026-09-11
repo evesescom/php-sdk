@@ -16,6 +16,7 @@ use Eveses\Sdk\Modules\Pricing;
 use Eveses\Sdk\Modules\Proxy;
 use Eveses\Sdk\Modules\Quotas;
 use Eveses\Sdk\Modules\Trial;
+use Eveses\Sdk\Modules\Billing;
 use Eveses\Sdk\Modules\Wallet;
 use Eveses\Sdk\Modules\Webhooks;
 use Eveses\Sdk\Modules\WebUnblocker;
@@ -43,17 +44,19 @@ use Eveses\Sdk\Modules\WebUnblocker;
  */
 final class Eveses
 {
-    public const VERSION = '0.6.0';
+    public const VERSION = '0.7.0';
 
     private const DEFAULT_BASE_URL = 'https://api.eveses.com';
 
     private const DEFAULT_TIMEOUT_S = 30;
 
-    private const DEFAULT_USER_AGENT = 'eveses-php/0.6.0';
+    private const DEFAULT_USER_AGENT = 'eveses-php/0.7.0';
 
     public readonly Numbers $numbers;
 
     public readonly Wallet $wallet;
+
+    public readonly Billing $billing;
 
     public readonly Account $account;
 
@@ -105,6 +108,7 @@ final class Eveses
 
         $this->numbers = new Numbers($this->http);
         $this->wallet = new Wallet($this->http);
+        $this->billing = new Billing($this->http);
         $this->account = new Account($this->http);
         $this->captcha = new Captcha($this->http);
         $this->emails = new Emails($this->http);
