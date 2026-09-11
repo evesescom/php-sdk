@@ -80,6 +80,16 @@ final class Proxy
             $query['plan_id'] = (int) ($opts['plan_id'] ?? 0);
             $query['location_id'] = (int) ($opts['location_id'] ?? 0);
             $query['quantity'] = (int) ($opts['quantity'] ?? 1);
+
+            // Paid options, keyed by the upstream question id from pricing().
+            // They move the price steeply — measured on one US ISP address,
+            // $2.00 plain against $5.60 with three-device access and a location
+            // request — so a quote taken without them and an order placed with
+            // them are two different prices. Quote with exactly what you intend
+            // to buy with.
+            foreach (self::extraRequirements($opts) as $questionId => $answer) {
+                $query["extra_requirements[{$questionId}]"] = $answer;
+            }
         }
 
         return (array) $this->http->request('GET', '/api/v1/proxy/quote', $query);
@@ -97,6 +107,8 @@ final class Proxy
      *     location_id?: int,
      *     location_name?: string,
      *     quantity?: int,
+     *     extra_requirements?: array<string|int, string>,
+     *     extra_requirement_labels?: array<string|int, string>,
      *     idempotency_key?: string,
      * } $opts
      */
@@ -122,11 +134,53 @@ final class Proxy
                 $body['location_name'] = (string) $opts['location_name'];
             }
             $body['quantity'] = (int) ($opts['quantity'] ?? 1);
+
+            // Send the SAME answers the quote was taken with. Buying without
+            // them after quoting with them sells at the plain price and leaves
+            // the provider's premium on us.
+            $extras = self::extraRequirements($opts);
+            if ($extras !== []) {
+                $body['extra_requirements'] = $extras;
+            }
+
+            // Optional: the human labels the buyer saw, stored on the order so
+            // it reads "Multi-device access: 3 Devices" rather than "9: 4".
+            $labels = self::extraRequirements($opts, 'extra_requirement_labels');
+            if ($labels !== []) {
+                $body['extra_requirement_labels'] = $labels;
+            }
         }
 
         $res = (array) $this->http->request('POST', '/api/v1/proxy/orders', null, $body, $headers);
 
         return self::mapOrder($res);
+    }
+
+    /**
+     * Answers as string=>string, or [] when none were given.
+     *
+     * Normalised here rather than trusted from the caller: the API keys these
+     * on the upstream question id, and an int key that arrives as an int in
+     * JSON is not the same thing to every server.
+     *
+     * @param  array<string,mixed>  $opts
+     * @return array<string,string>
+     */
+    private static function extraRequirements(array $opts, string $key = 'extra_requirements'): array
+    {
+        $raw = $opts[$key] ?? null;
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $questionId => $answer) {
+            if (is_scalar($answer) && (string) $answer !== '') {
+                $out[(string) $questionId] = (string) $answer;
+            }
+        }
+
+        return $out;
     }
 
     /**
